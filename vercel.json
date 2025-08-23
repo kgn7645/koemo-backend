@@ -1,5 +1,8 @@
 {
   "version": 2,
+  "framework": null,
+  "buildCommand": "echo 'Build already completed'",
+  "outputDirectory": "./",
   "builds": [
     {
       "src": "dist/index.js",
