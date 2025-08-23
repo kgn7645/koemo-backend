@@ -2,10 +2,8 @@
   "version": 2,
   "builds": [
     {
-      "src": "dist/index.js",
+      "src": "index.js",
       "use": "@vercel/node"
     }
-  ],
-  "installCommand": "npm install --production",
-  "buildCommand": "echo 'No build needed'"
+  ]
 }
