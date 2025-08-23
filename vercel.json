@@ -1,26 +1,11 @@
 {
   "version": 2,
-  "framework": null,
-  "buildCommand": "echo 'Build already completed'",
-  "outputDirectory": "./",
   "builds": [
     {
       "src": "dist/index.js",
       "use": "@vercel/node"
     }
   ],
-  "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "dist/index.js"
-    }
-  ],
-  "env": {
-    "NODE_ENV": "production"
-  },
-  "functions": {
-    "dist/index.js": {
-      "maxDuration": 60
-    }
-  }
+  "installCommand": "npm install --production",
+  "buildCommand": "echo 'No build needed'"
 }
