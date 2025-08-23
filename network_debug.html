@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔧 ネットワーク診断</title>
+    <style>
+        body {
+            font-family: monospace;
+            margin: 0;
+            padding: 10px;
+            background: #1a1a1a;
+            color: #00ff00;
+            font-size: 12px;
+        }
+        
+        .section {
+            background: #2a2a2a;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #444;
+        }
+        
+        .success { color: #00ff00; }
+        .error { color: #ff4444; }
+        .warning { color: #ffaa00; }
+        .info { color: #44aaff; }
+        
+        button {
+            background: #333;
+            color: #00ff00;
+            border: 1px solid #555;
+            padding: 10px 15px;
+            margin: 5px;
+            border-radius: 3px;
+            font-family: monospace;
+        }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        
+        @media (max-width: 600px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 KOEMO ネットワーク診断</h1>
+    
+    <div class="section">
+        <h3>📱 デバイス情報</h3>
+        <div id="deviceInfo"></div>
+    </div>
+    
+    <div class="section">
+        <h3>🌐 ネットワーク情報</h3>
+        <div id="networkInfo"></div>
+    </div>
+    
+    <div class="section">
+        <h3>🔗 接続テスト</h3>
+        <button onclick="testMultipleEndpoints()">全エンドポイントテスト</button>
+        <button onclick="testDifferentIPs()">異なるIPテスト</button>
+        <div id="connectionResults"></div>
+    </div>
+    
+    <div class="section">
+        <h3>📊 リアルタイム接続監視</h3>
+        <button onclick="startMonitoring()">監視開始</button>
+        <button onclick="stopMonitoring()">監視停止</button>
+        <div id="monitoring"></div>
+    </div>
+
+    <script>
+        let monitoringInterval;
+        
+        // デバイス情報表示
+        function showDeviceInfo() {
+            const info = document.getElementById('deviceInfo');
+            info.innerHTML = `
+                <div class="info">Platform: ${navigator.platform}</div>
+                <div class="info">User Agent: ${navigator.userAgent}</div>
+                <div class="info">Language: ${navigator.language}</div>
+                <div class="info">Cookie Enabled: ${navigator.cookieEnabled}</div>
+                <div class="info">Online: ${navigator.onLine}</div>
+                <div class="info">Connection Type: ${navigator.connection ? navigator.connection.effectiveType : 'Unknown'}</div>
+                <div class="info">Screen: ${screen.width}x${screen.height}</div>
+                <div class="info">Viewport: ${window.innerWidth}x${window.innerHeight}</div>
+                <div class="info">Location: ${window.location.href}</div>
+            `;
+        }
+        
+        // ネットワーク情報表示
+        function showNetworkInfo() {
+            const info = document.getElementById('networkInfo');
+            const connection = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            
+            let networkDetails = '';
+            if (connection) {
+                networkDetails = `
+                    <div class="info">Effective Type: ${connection.effectiveType}</div>
+                    <div class="info">Downlink: ${connection.downlink} Mbps</div>
+                    <div class="info">RTT: ${connection.rtt} ms</div>
+                    <div class="info">Save Data: ${connection.saveData}</div>
+                `;
+            } else {
+                networkDetails = '<div class="warning">Connection API not supported</div>';
+            }
+            
+            info.innerHTML = networkDetails;
+        }
+        
+        // 複数エンドポイントテスト
+        async function testMultipleEndpoints() {
+            const results = document.getElementById('connectionResults');
+            results.innerHTML = '<div class="info">🔄 テスト実行中...</div>';
+            
+            const endpoints = [
+                'http://192.168.0.8:3000/health',
+                'http://127.0.0.1:3000/health',
+                'http://localhost:3000/health',
+                'https://google.com',
+                'https://httpbin.org/get'
+            ];
+            
+            let output = '';
+            
+            for (const endpoint of endpoints) {
+                try {
+                    const startTime = Date.now();
+                    const response = await fetch(endpoint, { 
+                        method: 'GET',
+                        mode: 'cors',
+                        cache: 'no-cache'
+                    });
+                    const endTime = Date.now();
+                    const duration = endTime - startTime;
+                    
+                    if (response.ok) {
+                        output += `<div class="success">✅ ${endpoint} - ${response.status} (${duration}ms)</div>`;
+                    } else {
+                        output += `<div class="error">❌ ${endpoint} - ${response.status} (${duration}ms)</div>`;
+                    }
+                } catch (error) {
+                    output += `<div class="error">❌ ${endpoint} - ${error.message}</div>`;
+                }
+            }
+            
+            results.innerHTML = output;
+        }
+        
+        // 異なるIPアドレステスト
+        async function testDifferentIPs() {
+            const results = document.getElementById('connectionResults');
+            results.innerHTML = '<div class="info">🔄 IP範囲スキャン中...</div>';
+            
+            // 192.168.0.1-10 の範囲をテスト
+            const baseIP = '192.168.0.';
+            let output = '';
+            
+            for (let i = 1; i <= 10; i++) {
+                const ip = baseIP + i;
+                const url = `http://${ip}:3000/health`;
+                
+                try {
+                    const controller = new AbortController();
+                    const timeoutId = setTimeout(() => controller.abort(), 3000);
+                    
+                    const response = await fetch(url, {
+                        method: 'GET',
+                        signal: controller.signal
+                    });
+                    
+                    clearTimeout(timeoutId);
+                    
+                    if (response.ok) {
+                        output += `<div class="success">✅ ${ip}:3000 - 応答あり</div>`;
+                    } else {
+                        output += `<div class="warning">⚠️ ${ip}:3000 - ${response.status}</div>`;
+                    }
+                } catch (error) {
+                    if (error.name === 'AbortError') {
+                        output += `<div class="error">⏰ ${ip}:3000 - タイムアウト</div>`;
+                    } else {
+                        output += `<div class="error">❌ ${ip}:3000 - ${error.message}</div>`;
+                    }
+                }
+            }
+            
+            results.innerHTML = output;
+        }
+        
+        // リアルタイム監視
+        function startMonitoring() {
+            const monitoring = document.getElementById('monitoring');
+            let count = 0;
+            
+            monitoringInterval = setInterval(async () => {
+                count++;
+                const timestamp = new Date().toLocaleTimeString();
+                
+                try {
+                    const startTime = Date.now();
+                    const response = await fetch('http://192.168.0.8:3000/health');
+                    const endTime = Date.now();
+                    const duration = endTime - startTime;
+                    
+                    if (response.ok) {
+                        monitoring.innerHTML += `<div class="success">[${timestamp}] #${count} ✅ 接続OK (${duration}ms)</div>`;
+                    } else {
+                        monitoring.innerHTML += `<div class="error">[${timestamp}] #${count} ❌ エラー ${response.status}</div>`;
+                    }
+                } catch (error) {
+                    monitoring.innerHTML += `<div class="error">[${timestamp}] #${count} ❌ ${error.message}</div>`;
+                }
+                
+                // 最新10件のみ保持
+                const lines = monitoring.querySelectorAll('div');
+                if (lines.length > 10) {
+                    lines[0].remove();
+                }
+                
+                monitoring.scrollTop = monitoring.scrollHeight;
+            }, 2000);
+        }
+        
+        function stopMonitoring() {
+            if (monitoringInterval) {
+                clearInterval(monitoringInterval);
+                monitoringInterval = null;
+            }
+        }
+        
+        // 初期化
+        window.onload = function() {
+            showDeviceInfo();
+            showNetworkInfo();
+            
+            // ネットワーク状態の変化を監視
+            window.addEventListener('online', () => {
+                document.body.style.borderTop = '5px solid #00ff00';
+                setTimeout(() => document.body.style.borderTop = '', 2000);
+            });
+            
+            window.addEventListener('offline', () => {
+                document.body.style.borderTop = '5px solid #ff4444';
+            });
+        };
+    </script>
+</body>
+</html>

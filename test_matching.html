@@ -1,0 +1,1554 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOEMO マッチング + WebRTC テスト v2.1</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f7;
+            color: #1d1d1f;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        .user-panel {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .dual-panel {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        h1 {
+            text-align: center;
+            color: #007AFF;
+            font-size: 28px;
+            margin-bottom: 30px;
+        }
+        
+        h2 {
+            color: #007AFF;
+            border-bottom: 2px solid #007AFF;
+            padding-bottom: 10px;
+        }
+        
+        .status {
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-weight: 500;
+        }
+        
+        .status.connected {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        
+        .status.disconnected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .status.matching {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .status.matched {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .form-group {
+            margin-bottom: 16px;
+        }
+        
+        label {
+            display: block;
+            font-weight: 500;
+            margin-bottom: 6px;
+            color: #1d1d1f;
+        }
+        
+        input, select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e5e7;
+            border-radius: 8px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        
+        input:focus, select:focus {
+            outline: none;
+            border-color: #007AFF;
+        }
+        
+        button {
+            background-color: #007AFF;
+            color: white;
+            border: none;
+            padding: 14px 24px;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 12px;
+        }
+        
+        button:hover {
+            background-color: #0056CC;
+        }
+        
+        button:disabled {
+            background-color: #c7c7cc;
+            cursor: not-allowed;
+        }
+        
+        .secondary {
+            background-color: #8e8e93;
+        }
+        
+        .secondary:hover {
+            background-color: #6d6d70;
+        }
+        
+        .danger {
+            background-color: #ff3b30;
+        }
+        
+        .danger:hover {
+            background-color: #d70015;
+        }
+        
+        .success {
+            background-color: #30d158;
+        }
+        
+        .success:hover {
+            background-color: #28a745;
+        }
+        
+        .log {
+            background-color: #1d1d1f;
+            color: #f5f5f7;
+            font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
+            padding: 16px;
+            border-radius: 8px;
+            height: 200px;
+            overflow-y: auto;
+            font-size: 12px;
+            white-space: pre-wrap;
+        }
+        
+        .partner-info {
+            background-color: #f0f9ff;
+            border: 2px solid #007AFF;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+        }
+        
+        .audio-controls {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .audio-controls button {
+            flex: 1;
+            min-width: 120px;
+        }
+        
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 16px;
+            margin-top: 20px;
+        }
+        
+        .stat-item {
+            background-color: #f8f9fa;
+            padding: 12px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #007AFF;
+        }
+        
+        .stat-label {
+            font-size: 12px;
+            color: #666;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .match-countdown {
+            background-color: #fff3cd;
+            border: 2px solid #ffeaa7;
+            border-radius: 8px;
+            padding: 16px;
+            margin: 16px 0;
+            text-align: center;
+        }
+        
+        .countdown-timer {
+            font-size: 24px;
+            font-weight: bold;
+            color: #856404;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 KOEMO マッチング + WebRTC テスト</h1>
+        
+        <div class="dual-panel">
+            <!-- User 1 Panel -->
+            <div class="user-panel">
+                <h2>👤 ユーザー1 (ブラウザ)</h2>
+                
+                <div class="status disconnected" id="status1">
+                    📵 未接続
+                </div>
+                
+                <!-- Profile Settings -->
+                <div class="form-group">
+                    <label for="nickname1">ニックネーム:</label>
+                    <input type="text" id="nickname1" value="ブラウザユーザー">
+                </div>
+                
+                <div class="form-group">
+                    <label for="gender1">性別:</label>
+                    <select id="gender1">
+                        <option value="male">男性</option>
+                        <option value="female">女性</option>
+                        <option value="other">その他</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="age1">年齢:</label>
+                    <input type="number" id="age1" value="25" min="18" max="99">
+                </div>
+                
+                <div class="form-group">
+                    <label for="region1">地域:</label>
+                    <input type="text" id="region1" value="東京都">
+                </div>
+                
+                <!-- Connection Controls -->
+                <button onclick="connectUser1()" id="connectBtn1">接続</button>
+                <button onclick="startMatching1()" id="matchBtn1" disabled>マッチング開始</button>
+                <button onclick="cancelMatching1()" id="cancelBtn1" disabled>マッチング取消</button>
+                
+                <!-- Match Controls (hidden initially) -->
+                <div id="matchControls1" style="display: none;">
+                    <div class="partner-info" id="partnerInfo1"></div>
+                    <div class="match-countdown" id="countdown1" style="display: none;">
+                        <div class="countdown-timer" id="countdownTimer1">10</div>
+                        <div>秒後に自動接続します</div>
+                    </div>
+                    <div class="audio-controls">
+                        <button onclick="acceptMatch1()" id="acceptBtn1" class="success">通話開始</button>
+                        <button onclick="rejectMatch1()" id="rejectBtn1" class="danger">スキップ</button>
+                    </div>
+                </div>
+                
+                <!-- WebRTC Audio Controls -->
+                <div id="audioControls1" style="display: none;">
+                    <h3>🎵 音声コントロール</h3>
+                    <div class="audio-controls">
+                        <button onclick="toggleMute1()" id="muteBtn1">🎤 ミュート</button>
+                        <button onclick="toggleSpeaker1()" id="speakerBtn1">📢 スピーカー</button>
+                        <button onclick="endCall1()" id="endCallBtn1" class="danger">通話終了</button>
+                    </div>
+                    <audio id="remoteAudio1" autoplay></audio>
+                </div>
+                
+                <div id="log1" class="log"></div>
+            </div>
+            
+            <!-- User 2 Panel -->
+            <div class="user-panel">
+                <h2>👤 ユーザー2 (ブラウザ)</h2>
+                
+                <div class="status disconnected" id="status2">
+                    📵 未接続
+                </div>
+                
+                <!-- Profile Settings -->
+                <div class="form-group">
+                    <label for="nickname2">ニックネーム:</label>
+                    <input type="text" id="nickname2" value="テストユーザー">
+                </div>
+                
+                <div class="form-group">
+                    <label for="gender2">性別:</label>
+                    <select id="gender2">
+                        <option value="male">男性</option>
+                        <option value="female" selected>女性</option>
+                        <option value="other">その他</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="age2">年齢:</label>
+                    <input type="number" id="age2" value="28" min="18" max="99">
+                </div>
+                
+                <div class="form-group">
+                    <label for="region2">地域:</label>
+                    <input type="text" id="region2" value="大阪府">
+                </div>
+                
+                <!-- Connection Controls -->
+                <button onclick="connectUser2()" id="connectBtn2">接続</button>
+                <button onclick="startMatching2()" id="matchBtn2" disabled>マッチング開始</button>
+                <button onclick="cancelMatching2()" id="cancelBtn2" disabled>マッチング取消</button>
+                
+                <!-- Match Controls (hidden initially) -->
+                <div id="matchControls2" style="display: none;">
+                    <div class="partner-info" id="partnerInfo2"></div>
+                    <div class="match-countdown" id="countdown2" style="display: none;">
+                        <div class="countdown-timer" id="countdownTimer2">10</div>
+                        <div>秒後に自動接続します</div>
+                    </div>
+                    <div class="audio-controls">
+                        <button onclick="acceptMatch2()" id="acceptBtn2" class="success">通話開始</button>
+                        <button onclick="rejectMatch2()" id="rejectBtn2" class="danger">スキップ</button>
+                    </div>
+                </div>
+                
+                <!-- WebRTC Audio Controls -->
+                <div id="audioControls2" style="display: none;">
+                    <h3>🎵 音声コントロール</h3>
+                    <div class="audio-controls">
+                        <button onclick="toggleMute2()" id="muteBtn2">🎤 ミュート</button>
+                        <button onclick="toggleSpeaker2()" id="speakerBtn2">📢 スピーカー</button>
+                        <button onclick="endCall2()" id="endCallBtn2" class="danger">通話終了</button>
+                    </div>
+                    <audio id="remoteAudio2" autoplay></audio>
+                </div>
+                
+                <div id="log2" class="log"></div>
+            </div>
+        </div>
+        
+        <!-- Global Stats -->
+        <div class="user-panel">
+            <h2>📊 リアルタイム統計</h2>
+            <div class="stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="waitingCount">0</div>
+                    <div class="stat-label">待機中</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="activeMatches">0</div>
+                    <div class="stat-label">通話中</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="connectedUsers">0</div>
+                    <div class="stat-label">接続中</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Check browser support
+        function checkBrowserSupport() {
+            const errors = [];
+            
+            if (!window.WebSocket) {
+                errors.push('WebSocket not supported');
+            }
+            
+            if (!window.RTCPeerConnection) {
+                errors.push('WebRTC not supported');
+            }
+            
+            if (!navigator.mediaDevices) {
+                errors.push('MediaDevices API not supported');
+            }
+            
+            if (location.protocol !== 'https:' && location.hostname !== 'localhost' && location.hostname !== '127.0.0.1') {
+                errors.push('WebRTC requires HTTPS or localhost');
+            }
+            
+            if (errors.length > 0) {
+                alert('ブラウザサポートエラー:\\n' + errors.join('\\n'));
+                return false;
+            }
+            
+            console.log('✅ Browser support check passed');
+            return true;
+        }
+        
+        // Global variables
+        let ws1 = null, ws2 = null;
+        let pc1 = null, pc2 = null;
+        let localStream1 = null, localStream2 = null;
+        let currentMatch1 = null, currentMatch2 = null;
+        let countdownInterval1 = null, countdownInterval2 = null;
+        let isMuted1 = false, isMuted2 = false;
+        let isSpeakerOn1 = false, isSpeakerOn2 = false;
+        let isInCall1 = false, isInCall2 = false;
+        let currentRoomId1 = null, currentRoomId2 = null;
+        
+        const servers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        // Utility functions
+        function log(userId, message) {
+            const logElement = document.getElementById(`log${userId}`);
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.textContent += `[${timestamp}] ${message}\n`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+
+        function updateStatus(userId, status, className = '') {
+            const statusElement = document.getElementById(`status${userId}`);
+            statusElement.textContent = status;
+            statusElement.className = `status ${className}`;
+        }
+
+        function getProfile(userId) {
+            return {
+                nickname: document.getElementById(`nickname${userId}`).value,
+                gender: document.getElementById(`gender${userId}`).value,
+                age: parseInt(document.getElementById(`age${userId}`).value),
+                region: document.getElementById(`region${userId}`).value,
+                deviceId: `browser_user_${userId}`
+            };
+        }
+
+        // WebSocket connection functions
+        async function connectUser1() {
+            const userId = 'browser_user_1';
+            ws1 = new WebSocket(`ws://localhost:3000/signaling?userId=${userId}`);
+            
+            ws1.onopen = () => {
+                log(1, '✅ WebSocket接続成功');
+                updateStatus(1, '🔗 接続済み', 'connected');
+                document.getElementById('connectBtn1').disabled = true;
+                document.getElementById('matchBtn1').disabled = false;
+            };
+            
+            ws1.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage1(message);
+            };
+            
+            ws1.onclose = () => {
+                log(1, '❌ WebSocket接続切断');
+                updateStatus(1, '📵 切断', 'disconnected');
+                document.getElementById('connectBtn1').disabled = false;
+                document.getElementById('matchBtn1').disabled = true;
+            };
+            
+            ws1.onerror = (error) => {
+                log(1, `❌ WebSocket エラー: ${error}`);
+            };
+        }
+
+        async function connectUser2() {
+            const userId = 'browser_user_2';
+            ws2 = new WebSocket(`ws://localhost:3000/signaling?userId=${userId}`);
+            
+            ws2.onopen = () => {
+                log(2, '✅ WebSocket接続成功');
+                updateStatus(2, '🔗 接続済み', 'connected');
+                document.getElementById('connectBtn2').disabled = true;
+                document.getElementById('matchBtn2').disabled = false;
+            };
+            
+            ws2.onmessage = (event) => {
+                const message = JSON.parse(event.data);
+                handleMessage2(message);
+            };
+            
+            ws2.onclose = () => {
+                log(2, '❌ WebSocket接続切断');
+                updateStatus(2, '📵 切断', 'disconnected');
+                document.getElementById('connectBtn2').disabled = false;
+                document.getElementById('matchBtn2').disabled = true;
+            };
+            
+            ws2.onerror = (error) => {
+                log(2, `❌ WebSocket エラー: ${error}`);
+            };
+        }
+
+        // Matching functions
+        function startMatching1() {
+            if (ws1) {
+                const profile = getProfile(1);
+                ws1.send(JSON.stringify({
+                    type: 'start-matching',
+                    profile: profile
+                }));
+                
+                updateStatus(1, '🔍 マッチング中...', 'matching');
+                document.getElementById('matchBtn1').disabled = true;
+                document.getElementById('cancelBtn1').disabled = false;
+                log(1, '🎯 マッチング開始');
+            }
+        }
+
+        function startMatching2() {
+            if (ws2) {
+                const profile = getProfile(2);
+                ws2.send(JSON.stringify({
+                    type: 'start-matching',
+                    profile: profile
+                }));
+                
+                updateStatus(2, '🔍 マッチング中...', 'matching');
+                document.getElementById('matchBtn2').disabled = true;
+                document.getElementById('cancelBtn2').disabled = false;
+                log(2, '🎯 マッチング開始');
+            }
+        }
+
+        function cancelMatching1() {
+            if (ws1) {
+                ws1.send(JSON.stringify({
+                    type: 'cancel-matching'
+                }));
+                
+                resetMatchingState1();
+                log(1, '❌ マッチングキャンセル');
+            }
+        }
+
+        function cancelMatching2() {
+            if (ws2) {
+                ws2.send(JSON.stringify({
+                    type: 'cancel-matching'
+                }));
+                
+                resetMatchingState2();
+                log(2, '❌ マッチングキャンセル');
+            }
+        }
+
+        function acceptMatch1() {
+            if (ws1 && currentMatch1) {
+                ws1.send(JSON.stringify({
+                    type: 'accept-match',
+                    matchId: currentMatch1.matchId
+                }));
+                
+                log(1, '✅ マッチ受諾');
+                clearCountdown1();
+            }
+        }
+
+        function acceptMatch2() {
+            if (ws2 && currentMatch2) {
+                ws2.send(JSON.stringify({
+                    type: 'accept-match',
+                    matchId: currentMatch2.matchId
+                }));
+                
+                log(2, '✅ マッチ受諾');
+                clearCountdown2();
+            }
+        }
+
+        function rejectMatch1() {
+            if (ws1 && currentMatch1) {
+                ws1.send(JSON.stringify({
+                    type: 'reject-match',
+                    matchId: currentMatch1.matchId
+                }));
+                
+                log(1, '❌ マッチ拒否');
+                resetMatchingState1();
+            }
+        }
+
+        function rejectMatch2() {
+            if (ws2 && currentMatch2) {
+                ws2.send(JSON.stringify({
+                    type: 'reject-match',
+                    matchId: currentMatch2.matchId
+                }));
+                
+                log(2, '❌ マッチ拒否');
+                resetMatchingState2();
+            }
+        }
+
+        // Message handlers
+        function handleMessage1(message) {
+            log(1, `📨 受信: ${message.type}`);
+            
+            switch (message.type) {
+                case 'connected':
+                    log(1, `✅ サーバー接続確認: ${message.userId}`);
+                    break;
+                    
+                case 'matching-status':
+                    log(1, `📊 マッチング状況: ${message.status} (待機: ${message.queuePosition})`);
+                    break;
+                    
+                case 'match-found':
+                    currentMatch1 = message;
+                    showMatch1(message);
+                    break;
+                    
+                case 'start-call':
+                    log(1, `📞 通話開始: ${message.roomId}`);
+                    startWebRTCCall1(message);
+                    break;
+                    
+                case 'joined-room':
+                    log(1, `🏠 ルーム参加: ${message.roomId} (${message.participantCount}/2)`);
+                    break;
+                    
+                case 'room-ready':
+                    log(1, `✅ ルーム準備完了 - 参加者: ${message.participants.length}`);
+                    // Room is ready, initiator creates offer
+                    if (message.participants[0] === 'browser_user_1') {
+                        setTimeout(() => createOffer1(), 1000);
+                    }
+                    break;
+                    
+                case 'match-cancelled':
+                    log(1, `❌ マッチキャンセル: ${message.reason}`);
+                    resetMatchingState1();
+                    break;
+                    
+                case 'offer':
+                    handleOffer1(message);
+                    break;
+                    
+                case 'answer':
+                    handleAnswer1(message);
+                    break;
+                    
+                case 'ice-candidate':
+                    handleIceCandidate1(message);
+                    break;
+                    
+                default:
+                    log(1, `⚠️ 未知のメッセージタイプ: ${message.type}`);
+            }
+        }
+
+        function handleMessage2(message) {
+            log(2, `📨 受信: ${message.type}`);
+            
+            switch (message.type) {
+                case 'connected':
+                    log(2, `✅ サーバー接続確認: ${message.userId}`);
+                    break;
+                    
+                case 'matching-status':
+                    log(2, `📊 マッチング状況: ${message.status} (待機: ${message.queuePosition})`);
+                    break;
+                    
+                case 'match-found':
+                    currentMatch2 = message;
+                    showMatch2(message);
+                    break;
+                    
+                case 'start-call':
+                    log(2, `📞 通話開始: ${message.roomId}`);
+                    startWebRTCCall2(message);
+                    break;
+                    
+                case 'joined-room':
+                    log(2, `🏠 ルーム参加: ${message.roomId} (${message.participantCount}/2)`);
+                    break;
+                    
+                case 'room-ready':
+                    log(2, `✅ ルーム準備完了 - 参加者: ${message.participants.length}`);
+                    // Room is ready, initiator creates offer
+                    if (message.participants[0] === 'browser_user_2') {
+                        setTimeout(() => createOffer2(), 1000);
+                    }
+                    break;
+                    
+                case 'match-cancelled':
+                    log(2, `❌ マッチキャンセル: ${message.reason}`);
+                    resetMatchingState2();
+                    break;
+                    
+                case 'offer':
+                    handleOffer2(message);
+                    break;
+                    
+                case 'answer':
+                    handleAnswer2(message);
+                    break;
+                    
+                case 'ice-candidate':
+                    handleIceCandidate2(message);
+                    break;
+                    
+                default:
+                    log(2, `⚠️ 未知のメッセージタイプ: ${message.type}`);
+            }
+        }
+
+        // Match display functions
+        function showMatch1(match) {
+            updateStatus(1, '🎉 マッチ成立！', 'matched');
+            
+            const partnerInfo = document.getElementById('partnerInfo1');
+            partnerInfo.innerHTML = `
+                <h3>👤 マッチした相手</h3>
+                <p><strong>ニックネーム:</strong> ${match.partner.nickname}</p>
+                <p><strong>性別:</strong> ${match.partner.gender}</p>
+                <p><strong>年齢:</strong> ${match.partner.age}歳</p>
+                <p><strong>地域:</strong> ${match.partner.region}</p>
+            `;
+            
+            document.getElementById('matchControls1').style.display = 'block';
+            startCountdown1();
+            log(1, `🎉 マッチ成立: ${match.partner.nickname}`);
+        }
+
+        function showMatch2(match) {
+            updateStatus(2, '🎉 マッチ成立！', 'matched');
+            
+            const partnerInfo = document.getElementById('partnerInfo2');
+            partnerInfo.innerHTML = `
+                <h3>👤 マッチした相手</h3>
+                <p><strong>ニックネーム:</strong> ${match.partner.nickname}</p>
+                <p><strong>性別:</strong> ${match.partner.gender}</p>
+                <p><strong>年齢:</strong> ${match.partner.age}歳</p>
+                <p><strong>地域:</strong> ${match.partner.region}</p>
+            `;
+            
+            document.getElementById('matchControls2').style.display = 'block';
+            startCountdown2();
+            log(2, `🎉 マッチ成立: ${match.partner.nickname}`);
+        }
+
+        // Countdown functions
+        function startCountdown1() {
+            let seconds = 10;
+            document.getElementById('countdown1').style.display = 'block';
+            document.getElementById('countdownTimer1').textContent = seconds;
+            
+            countdownInterval1 = setInterval(() => {
+                seconds--;
+                document.getElementById('countdownTimer1').textContent = seconds;
+                
+                if (seconds <= 0) {
+                    clearInterval(countdownInterval1);
+                    acceptMatch1();
+                }
+            }, 1000);
+        }
+
+        function startCountdown2() {
+            let seconds = 10;
+            document.getElementById('countdown2').style.display = 'block';
+            document.getElementById('countdownTimer2').textContent = seconds;
+            
+            countdownInterval2 = setInterval(() => {
+                seconds--;
+                document.getElementById('countdownTimer2').textContent = seconds;
+                
+                if (seconds <= 0) {
+                    clearInterval(countdownInterval2);
+                    acceptMatch2();
+                }
+            }, 1000);
+        }
+
+        function clearCountdown1() {
+            if (countdownInterval1) {
+                clearInterval(countdownInterval1);
+                countdownInterval1 = null;
+            }
+            document.getElementById('countdown1').style.display = 'none';
+        }
+
+        function clearCountdown2() {
+            if (countdownInterval2) {
+                clearInterval(countdownInterval2);
+                countdownInterval2 = null;
+            }
+            document.getElementById('countdown2').style.display = 'none';
+        }
+
+        // WebRTC functions
+        async function startWebRTCCall1(callMessage) {
+            try {
+                updateStatus(1, '📞 通話接続中...', 'connected');
+                
+                // Check WebRTC support
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    log(1, '⚠️ WebRTC APIが利用できません。HTTPSまたはlocalhostでアクセスしてください。');
+                    log(1, '📱 現在のプロトコル: ' + window.location.protocol);
+                    
+                    // Try to proceed without getUserMedia for testing
+                    log(1, '🔧 マイクなしでWebRTC接続を試行します...');
+                    
+                    // Create peer connection without local stream
+                    pc1 = new RTCPeerConnection(servers);
+                    
+                    // Create a dummy audio track if possible
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const dst = oscillator.connect(audioContext.createMediaStreamDestination());
+                        localStream1 = dst.stream;
+                        
+                        localStream1.getTracks().forEach(track => {
+                            pc1.addTrack(track, localStream1);
+                        });
+                        log(1, '🎵 ダミー音声トラック作成');
+                    } catch (e) {
+                        log(1, '⚠️ ダミートラック作成失敗: ' + e.message);
+                    }
+                } else {
+                    // Get user media normally
+                    localStream1 = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    log(1, '🎤 マイクアクセス取得');
+                    
+                    // Create peer connection
+                    pc1 = new RTCPeerConnection(servers);
+                    
+                    // Add local stream
+                    localStream1.getTracks().forEach(track => {
+                        pc1.addTrack(track, localStream1);
+                    });
+                }
+                
+                // Handle remote stream
+                pc1.ontrack = (event) => {
+                    log(1, '🎵 リモート音声受信');
+                    const remoteAudio = document.getElementById('remoteAudio1');
+                    remoteAudio.srcObject = event.streams[0];
+                    remoteAudio.play().catch(e => log(1, `音声再生エラー: ${e.message}`));
+                };
+                
+                // Handle ICE candidates
+                pc1.onicecandidate = (event) => {
+                    if (event.candidate && ws1) {
+                        ws1.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: {
+                                candidate: event.candidate.candidate,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            }
+                        }));
+                        log(1, '🧊 ICE候補送信');
+                    }
+                };
+                
+                // Join WebRTC room
+                ws1.send(JSON.stringify({
+                    type: 'join-room',
+                    roomId: callMessage.roomId
+                }));
+                
+                // If initiator, create offer
+                if (callMessage.isInitiator) {
+                    log(1, '📤 オファー作成中...');
+                    setTimeout(async () => {
+                        const offer = await pc1.createOffer();
+                        await pc1.setLocalDescription(offer);
+                        
+                        ws1.send(JSON.stringify({
+                            type: 'offer',
+                            offer: offer.sdp
+                        }));
+                        log(1, '📤 オファー送信');
+                    }, 1000);
+                }
+                
+                showAudioControls1();
+                hideMatchControls1();
+                
+            } catch (error) {
+                log(1, `❌ WebRTC開始エラー: ${error.message}`);
+            }
+        }
+
+        async function startWebRTCCall2(callMessage) {
+            try {
+                updateStatus(2, '📞 通話接続中...', 'connected');
+                
+                // Check WebRTC support
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    log(2, '⚠️ WebRTC APIが利用できません。HTTPSまたはlocalhostでアクセスしてください。');
+                    log(2, '📱 現在のプロトコル: ' + window.location.protocol);
+                    
+                    // Try to proceed without getUserMedia for testing
+                    log(2, '🔧 マイクなしでWebRTC接続を試行します...');
+                    
+                    // Create peer connection without local stream
+                    pc2 = new RTCPeerConnection(servers);
+                    
+                    // Create a dummy audio track if possible
+                    try {
+                        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                        const oscillator = audioContext.createOscillator();
+                        const dst = oscillator.connect(audioContext.createMediaStreamDestination());
+                        localStream2 = dst.stream;
+                        
+                        localStream2.getTracks().forEach(track => {
+                            pc2.addTrack(track, localStream2);
+                        });
+                        log(2, '🎵 ダミー音声トラック作成');
+                    } catch (e) {
+                        log(2, '⚠️ ダミートラック作成失敗: ' + e.message);
+                    }
+                } else {
+                    // Get user media normally
+                    localStream2 = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                    log(2, '🎤 マイクアクセス取得');
+                    
+                    // Create peer connection
+                    pc2 = new RTCPeerConnection(servers);
+                    
+                    // Add local stream
+                    localStream2.getTracks().forEach(track => {
+                        pc2.addTrack(track, localStream2);
+                    });
+                }
+                
+                // Handle remote stream
+                pc2.ontrack = (event) => {
+                    log(2, '🎵 リモート音声受信');
+                    const remoteAudio = document.getElementById('remoteAudio2');
+                    remoteAudio.srcObject = event.streams[0];
+                    remoteAudio.play().catch(e => log(2, `音声再生エラー: ${e.message}`));
+                };
+                
+                // Handle ICE candidates
+                pc2.onicecandidate = (event) => {
+                    if (event.candidate && ws2) {
+                        ws2.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: {
+                                candidate: event.candidate.candidate,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            }
+                        }));
+                        log(2, '🧊 ICE候補送信');
+                    }
+                };
+                
+                // Join WebRTC room
+                ws2.send(JSON.stringify({
+                    type: 'join-room',
+                    roomId: callMessage.roomId
+                }));
+                
+                // If initiator, create offer
+                if (callMessage.isInitiator) {
+                    log(2, '📤 オファー作成中...');
+                    setTimeout(async () => {
+                        const offer = await pc2.createOffer();
+                        await pc2.setLocalDescription(offer);
+                        
+                        ws2.send(JSON.stringify({
+                            type: 'offer',
+                            offer: offer.sdp
+                        }));
+                        log(2, '📤 オファー送信');
+                    }, 1000);
+                }
+                
+                showAudioControls2();
+                hideMatchControls2();
+                
+            } catch (error) {
+                log(2, `❌ WebRTC開始エラー: ${error.message}`);
+            }
+        }
+
+        // WebRTC message handlers
+        async function handleOffer1(message) {
+            console.log('🔍 DEBUG: handleOffer1 called with message:', message);
+            log(1, '🔍 DEBUG: handleOffer1 called with message: ' + JSON.stringify(message));
+            
+            try {
+                if (!pc1) {
+                    log(1, '❌ PeerConnectionが存在しません');
+                    return;
+                }
+                
+                log(1, '📥 オファー受信、回答作成中...');
+                
+                // Extract offer SDP from message structure
+                let offerSdp = null;
+                let offerType = 'offer';
+                
+                console.log('🔍 DEBUG: message.offer type:', typeof message.offer);
+                console.log('🔍 DEBUG: message.offer value:', message.offer);
+                
+                // Handle various offer formats - iOS sends just the SDP string
+                if (typeof message.offer === 'string') {
+                    offerSdp = message.offer;
+                    console.log('🔍 DEBUG: Using direct string offer');
+                } else if (message.offer && typeof message.offer === 'object') {
+                    if (typeof message.offer.sdp === 'string') {
+                        offerSdp = message.offer.sdp;
+                        offerType = message.offer.type || 'offer';
+                        console.log('🔍 DEBUG: Using offer.sdp');
+                    } else {
+                        // Try other possible structures
+                        offerSdp = message.offer.offer || message.offer;
+                        console.log('🔍 DEBUG: Using offer.offer fallback');
+                    }
+                } else {
+                    log(1, '❌ 無効なオファー形式 - オファーが見つかりません');
+                    console.error('❌ Invalid offer format - full message:', message);
+                    return;
+                }
+                
+                // Validate SDP string
+                if (!offerSdp || typeof offerSdp !== 'string' || offerSdp.length < 10) {
+                    log(1, '❌ 無効なSDP文字列');
+                    console.error('❌ Invalid SDP string:', {
+                        type: typeof offerSdp,
+                        length: offerSdp ? offerSdp.length : 'undefined',
+                        value: offerSdp
+                    });
+                    return;
+                }
+                
+                log(1, '✅ オファーSDP抽出成功: ' + offerSdp.substring(0, 100) + '...');
+                console.log('✅ Successfully extracted SDP:', offerSdp.substring(0, 200));
+                
+                // Create RTCSessionDescription with proper validation
+                let offer;
+                try {
+                    offer = new RTCSessionDescription({
+                        type: offerType,
+                        sdp: offerSdp
+                    });
+                    console.log('✅ RTCSessionDescription created successfully');
+                } catch (error) {
+                    log(1, '❌ RTCSessionDescription作成エラー: ' + error.message);
+                    console.error('❌ RTCSessionDescription creation error:', error);
+                    console.error('❌ SDP used:', offerSdp.substring(0, 200));
+                    return;
+                }
+                
+                await pc1.setRemoteDescription(offer);
+                log(1, '✅ リモート記述設定完了');
+                
+                // Process any pending ICE candidates
+                if (window.pendingIceCandidates1) {
+                    for (const pendingCandidate of window.pendingIceCandidates1) {
+                        await handleIceCandidate1(pendingCandidate);
+                    }
+                    window.pendingIceCandidates1 = [];
+                    log(1, '✅ 保留中のICE候補を処理しました');
+                }
+                
+                const answer = await pc1.createAnswer();
+                await pc1.setLocalDescription(answer);
+                
+                ws1.send(JSON.stringify({
+                    type: 'answer',
+                    answer: answer.sdp
+                }));
+                log(1, '📤 アンサー送信');
+            } catch (error) {
+                log(1, '❌ オファー処理失敗: ' + error.message);
+            }
+        }
+
+        async function handleOffer2(message) {
+            try {
+                if (!pc2) {
+                    log(2, '❌ PeerConnectionが存在しません');
+                    return;
+                }
+                
+                log(2, '📥 オファー受信、回答作成中...');
+                log(2, '🔍 受信したオファーデータ: ' + JSON.stringify(message));
+                
+                // Extract offer SDP from message structure
+                let offerSdp;
+                if (typeof message.offer === 'string') {
+                    offerSdp = message.offer;
+                } else if (message.offer && typeof message.offer.sdp === 'string') {
+                    offerSdp = message.offer.sdp;
+                } else {
+                    log(2, '❌ 無効なオファー形式 - オファーが見つかりません');
+                    log(2, '🔍 オファーの型: ' + typeof message.offer);
+                    log(2, '🔍 オファーの内容: ' + JSON.stringify(message.offer));
+                    return;
+                }
+                
+                log(2, '✅ オファーSDP抽出成功: ' + offerSdp.substring(0, 100) + '...');
+                
+                // Create RTCSessionDescription
+                const offer = new RTCSessionDescription({
+                    type: 'offer',
+                    sdp: offerSdp
+                });
+                
+                await pc2.setRemoteDescription(offer);
+                log(2, '✅ リモート記述設定完了');
+                
+                // Process any pending ICE candidates
+                if (window.pendingIceCandidates2) {
+                    for (const pendingCandidate of window.pendingIceCandidates2) {
+                        await handleIceCandidate2(pendingCandidate);
+                    }
+                    window.pendingIceCandidates2 = [];
+                    log(2, '✅ 保留中のICE候補を処理しました');
+                }
+                
+                const answer = await pc2.createAnswer();
+                await pc2.setLocalDescription(answer);
+                
+                ws2.send(JSON.stringify({
+                    type: 'answer',
+                    answer: answer.sdp
+                }));
+                log(2, '📤 アンサー送信');
+            } catch (error) {
+                log(2, '❌ オファー処理失敗: ' + error.message);
+            }
+        }
+
+        async function handleAnswer1(message) {
+            try {
+                if (!pc1) {
+                    log(1, '❌ PeerConnectionが存在しません');
+                    return;
+                }
+                
+                log(1, '📥 アンサー受信');
+                
+                // Extract answer SDP from message structure
+                let answerSdp;
+                if (typeof message.answer === 'string') {
+                    answerSdp = message.answer;
+                } else if (message.answer && typeof message.answer.sdp === 'string') {
+                    answerSdp = message.answer.sdp;
+                } else {
+                    log(1, '❌ 無効なアンサー形式');
+                    return;
+                }
+                
+                const answer = new RTCSessionDescription({
+                    type: 'answer',
+                    sdp: answerSdp
+                });
+                
+                await pc1.setRemoteDescription(answer);
+                updateStatus(1, '📞 通話中', 'connected');
+                log(1, '✅ アンサー設定完了');
+            } catch (error) {
+                log(1, '❌ アンサー処理失敗: ' + error.message);
+            }
+        }
+
+        async function handleAnswer2(message) {
+            try {
+                if (!pc2) {
+                    log(2, '❌ PeerConnectionが存在しません');
+                    return;
+                }
+                
+                log(2, '📥 アンサー受信');
+                
+                // Extract answer SDP from message structure
+                let answerSdp;
+                if (typeof message.answer === 'string') {
+                    answerSdp = message.answer;
+                } else if (message.answer && typeof message.answer.sdp === 'string') {
+                    answerSdp = message.answer.sdp;
+                } else {
+                    log(2, '❌ 無効なアンサー形式');
+                    return;
+                }
+                
+                const answer = new RTCSessionDescription({
+                    type: 'answer',
+                    sdp: answerSdp
+                });
+                
+                await pc2.setRemoteDescription(answer);
+                updateStatus(2, '📞 通話中', 'connected');
+                log(2, '✅ アンサー設定完了');
+            } catch (error) {
+                log(2, '❌ アンサー処理失敗: ' + error.message);
+            }
+        }
+
+        async function handleIceCandidate1(message) {
+            try {
+                if (!pc1) {
+                    log(1, '❌ PeerConnectionが存在しません');
+                    return;
+                }
+                
+                // Check if remote description is set
+                if (!pc1.remoteDescription) {
+                    log(1, '⚠️ リモート記述が未設定 - ICE候補を保存');
+                    // Queue ICE candidates if remote description is not set yet
+                    if (!window.pendingIceCandidates1) {
+                        window.pendingIceCandidates1 = [];
+                    }
+                    window.pendingIceCandidates1.push(message);
+                    return;
+                }
+                
+                const candidate = new RTCIceCandidate({
+                    candidate: message.candidate.candidate,
+                    sdpMLineIndex: message.candidate.sdpMLineIndex,
+                    sdpMid: message.candidate.sdpMid
+                });
+                
+                await pc1.addIceCandidate(candidate);
+                log(1, '✅ ICE候補追加');
+            } catch (error) {
+                log(1, '❌ ICE候補追加失敗: ' + error.message);
+            }
+        }
+
+        async function handleIceCandidate2(message) {
+            try {
+                if (!pc2) {
+                    log(2, '❌ PeerConnectionが存在しません');
+                    return;
+                }
+                
+                // Check if remote description is set
+                if (!pc2.remoteDescription) {
+                    log(2, '⚠️ リモート記述が未設定 - ICE候補を保存');
+                    // Queue ICE candidates if remote description is not set yet
+                    if (!window.pendingIceCandidates2) {
+                        window.pendingIceCandidates2 = [];
+                    }
+                    window.pendingIceCandidates2.push(message);
+                    return;
+                }
+                
+                const candidate = new RTCIceCandidate({
+                    candidate: message.candidate.candidate,
+                    sdpMLineIndex: message.candidate.sdpMLineIndex,
+                    sdpMid: message.candidate.sdpMid
+                });
+                
+                await pc2.addIceCandidate(candidate);
+                log(2, '✅ ICE候補追加');
+            } catch (error) {
+                log(2, '❌ ICE候補追加失敗: ' + error.message);
+            }
+        }
+
+        // Audio control functions
+        function toggleMute1() {
+            if (localStream1) {
+                const audioTrack = localStream1.getAudioTracks()[0];
+                audioTrack.enabled = !audioTrack.enabled;
+                isMuted1 = !audioTrack.enabled;
+                
+                document.getElementById('muteBtn1').textContent = isMuted1 ? '🔇 ミュート解除' : '🎤 ミュート';
+                log(1, isMuted1 ? '🔇 ミュート' : '🎤 ミュート解除');
+            }
+        }
+
+        function toggleMute2() {
+            if (localStream2) {
+                const audioTrack = localStream2.getAudioTracks()[0];
+                audioTrack.enabled = !audioTrack.enabled;
+                isMuted2 = !audioTrack.enabled;
+                
+                document.getElementById('muteBtn2').textContent = isMuted2 ? '🔇 ミュート解除' : '🎤 ミュート';
+                log(2, isMuted2 ? '🔇 ミュート' : '🎤 ミュート解除');
+            }
+        }
+
+        function toggleSpeaker1() {
+            isSpeakerOn1 = !isSpeakerOn1;
+            document.getElementById('speakerBtn1').textContent = isSpeakerOn1 ? '🔇 スピーカー OFF' : '📢 スピーカー ON';
+            log(1, isSpeakerOn1 ? '📢 スピーカー ON' : '🔇 スピーカー OFF');
+        }
+
+        function toggleSpeaker2() {
+            isSpeakerOn2 = !isSpeakerOn2;
+            document.getElementById('speakerBtn2').textContent = isSpeakerOn2 ? '🔇 スピーカー OFF' : '📢 スピーカー ON';
+            log(2, isSpeakerOn2 ? '📢 スピーカー ON' : '🔇 スピーカー OFF');
+        }
+
+        function endCall1() {
+            if (pc1) {
+                pc1.close();
+                pc1 = null;
+            }
+            
+            if (localStream1) {
+                localStream1.getTracks().forEach(track => track.stop());
+                localStream1 = null;
+            }
+            
+            if (ws1 && currentMatch1) {
+                ws1.send(JSON.stringify({
+                    type: 'end-match',
+                    matchId: currentMatch1.matchId
+                }));
+            }
+            
+            hideAudioControls1();
+            resetMatchingState1();
+            log(1, '📴 通話終了');
+        }
+
+        function endCall2() {
+            if (pc2) {
+                pc2.close();
+                pc2 = null;
+            }
+            
+            if (localStream2) {
+                localStream2.getTracks().forEach(track => track.stop());
+                localStream2 = null;
+            }
+            
+            if (ws2 && currentMatch2) {
+                ws2.send(JSON.stringify({
+                    type: 'end-match',
+                    matchId: currentMatch2.matchId
+                }));
+            }
+            
+            hideAudioControls2();
+            resetMatchingState2();
+            log(2, '📴 通話終了');
+        }
+
+        // UI state management
+        function resetMatchingState1() {
+            updateStatus(1, '🔗 接続済み', 'connected');
+            document.getElementById('matchBtn1').disabled = false;
+            document.getElementById('cancelBtn1').disabled = true;
+            document.getElementById('matchControls1').style.display = 'none';
+            clearCountdown1();
+            currentMatch1 = null;
+        }
+
+        function resetMatchingState2() {
+            updateStatus(2, '🔗 接続済み', 'connected');
+            document.getElementById('matchBtn2').disabled = false;
+            document.getElementById('cancelBtn2').disabled = true;
+            document.getElementById('matchControls2').style.display = 'none';
+            clearCountdown2();
+            currentMatch2 = null;
+        }
+
+        function showAudioControls1() {
+            document.getElementById('audioControls1').style.display = 'block';
+        }
+
+        function showAudioControls2() {
+            document.getElementById('audioControls2').style.display = 'block';
+        }
+
+        function hideAudioControls1() {
+            document.getElementById('audioControls1').style.display = 'none';
+        }
+
+        function hideAudioControls2() {
+            document.getElementById('audioControls2').style.display = 'none';
+        }
+
+        function hideMatchControls1() {
+            document.getElementById('matchControls1').style.display = 'none';
+        }
+
+        function hideMatchControls2() {
+            document.getElementById('matchControls2').style.display = 'none';
+        }
+
+        // WebRTC helper functions
+        async function createOffer1() {
+            if (pc1) {
+                try {
+                    const offer = await pc1.createOffer();
+                    await pc1.setLocalDescription(offer);
+                    
+                    ws1.send(JSON.stringify({
+                        type: 'offer',
+                        offer: {
+                            sdp: offer.sdp,
+                            type: offer.type
+                        }
+                    }));
+                    log(1, '📤 オファー送信');
+                } catch (error) {
+                    log(1, `❌ オファー作成失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function createOffer2() {
+            if (pc2) {
+                try {
+                    const offer = await pc2.createOffer();
+                    await pc2.setLocalDescription(offer);
+                    
+                    ws2.send(JSON.stringify({
+                        type: 'offer',
+                        offer: {
+                            sdp: offer.sdp,
+                            type: offer.type
+                        }
+                    }));
+                    log(2, '📤 オファー送信');
+                } catch (error) {
+                    log(2, `❌ オファー作成失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function handleOffer1(message) {
+            if (pc1) {
+                try {
+                    log(1, '📥 オファー受信、回答作成中...');
+                    await pc1.setRemoteDescription(new RTCSessionDescription(message.offer));
+                    
+                    const answer = await pc1.createAnswer();
+                    await pc1.setLocalDescription(answer);
+                    
+                    ws1.send(JSON.stringify({
+                        type: 'answer',
+                        answer: {
+                            sdp: answer.sdp,
+                            type: answer.type
+                        }
+                    }));
+                    log(1, '📤 回答送信');
+                } catch (error) {
+                    log(1, `❌ オファー処理失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function handleOffer2(message) {
+            if (pc2) {
+                try {
+                    log(2, '📥 オファー受信、回答作成中...');
+                    await pc2.setRemoteDescription(new RTCSessionDescription(message.offer));
+                    
+                    const answer = await pc2.createAnswer();
+                    await pc2.setLocalDescription(answer);
+                    
+                    ws2.send(JSON.stringify({
+                        type: 'answer',
+                        answer: {
+                            sdp: answer.sdp,
+                            type: answer.type
+                        }
+                    }));
+                    log(2, '📤 回答送信');
+                } catch (error) {
+                    log(2, `❌ オファー処理失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function handleAnswer1(message) {
+            if (pc1) {
+                try {
+                    log(1, '📥 回答受信');
+                    await pc1.setRemoteDescription(new RTCSessionDescription(message.answer));
+                } catch (error) {
+                    log(1, `❌ 回答処理失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function handleAnswer2(message) {
+            if (pc2) {
+                try {
+                    log(2, '📥 回答受信');
+                    await pc2.setRemoteDescription(new RTCSessionDescription(message.answer));
+                } catch (error) {
+                    log(2, `❌ 回答処理失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function handleIceCandidate1(message) {
+            if (pc1) {
+                try {
+                    await pc1.addIceCandidate(new RTCIceCandidate(message.candidate));
+                    log(1, '🧊 ICE候補追加');
+                } catch (error) {
+                    log(1, `❌ ICE候補追加失敗: ${error.message}`);
+                }
+            }
+        }
+        
+        async function handleIceCandidate2(message) {
+            if (pc2) {
+                try {
+                    await pc2.addIceCandidate(new RTCIceCandidate(message.candidate));
+                    log(2, '🧊 ICE候補追加');
+                } catch (error) {
+                    log(2, `❌ ICE候補追加失敗: ${error.message}`);
+                }
+            }
+        }
+
+        // Auto-connect both users when page loads
+        window.onload = () => {
+            log(1, '🚀 ページ読み込み完了');
+            log(2, '🚀 ページ読み込み完了');
+            
+            // Check browser support first
+            if (!checkBrowserSupport()) {
+                return;
+            }
+            
+            // Auto-connect both users after 1 second
+            setTimeout(() => {
+                connectUser1();
+                setTimeout(() => {
+                    connectUser2();
+                }, 500);
+            }, 1000);
+        };
+    </script>
+</body>
+</html>

@@ -222,7 +222,7 @@ export class WebSocketHandler {
 
     try {
       const db = database.getDb();
-      const call = await db.collection('calls').findOne({ _id: callId });
+      const call = await db.collection('calls').findOne({ _id: callId as any });
       
       if (!call) {
         ws.send(JSON.stringify({
@@ -236,7 +236,7 @@ export class WebSocketHandler {
       const duration = Math.floor((endTime.getTime() - call.startTime.getTime()) / 1000);
 
       await db.collection('calls').updateOne(
-        { _id: callId },
+        { _id: callId as any },
         {
           $set: {
             status: 'ended',
@@ -366,7 +366,7 @@ export class WebSocketHandler {
     try {
       const db = database.getDb();
       await db.collection('users').updateOne(
-        { _id: userId },
+        { _id: userId as any },
         {
           $set: {
             'status.current': status,

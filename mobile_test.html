@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>📱 KOEMO モバイル接続テスト</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 30px;
+            border-radius: 20px;
+            text-align: center;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 400px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-weight: bold;
+            font-size: 18px;
+        }
+        
+        .success {
+            background: rgba(76, 175, 80, 0.3);
+            border: 2px solid #4CAF50;
+        }
+        
+        .error {
+            background: rgba(244, 67, 54, 0.3);
+            border: 2px solid #f44336;
+        }
+        
+        .info {
+            background: rgba(33, 150, 243, 0.3);
+            border: 2px solid #2196F3;
+        }
+        
+        button {
+            background: linear-gradient(45deg, #FF6B6B, #FF8E8E);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            margin: 10px;
+            box-shadow: 0 4px 15px rgba(255, 107, 107, 0.4);
+            transition: all 0.3s ease;
+        }
+        
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(255, 107, 107, 0.6);
+        }
+        
+        .log {
+            background: rgba(0, 0, 0, 0.5);
+            color: #00ff00;
+            font-family: monospace;
+            padding: 15px;
+            border-radius: 10px;
+            text-align: left;
+            height: 200px;
+            overflow-y: auto;
+            margin-top: 20px;
+            font-size: 12px;
+        }
+        
+        .ip-info {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 10px;
+            border-radius: 10px;
+            margin: 10px 0;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📱 KOEMO 接続テスト</h1>
+        
+        <div class="ip-info">
+            <strong>サーバーIP:</strong> 192.168.0.8:3000<br>
+            <strong>現在のURL:</strong> <span id="currentURL"></span>
+        </div>
+        
+        <div id="status" class="status info">
+            🔄 テスト準備中...
+        </div>
+        
+        <button onclick="testConnection()">🔗 接続テスト</button>
+        <button onclick="testWebSocket()">📡 WebSocket テスト</button>
+        <button onclick="clearLog()">🗑️ ログクリア</button>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        // 現在のURLを表示
+        document.getElementById('currentURL').textContent = window.location.href;
+        
+        function log(message) {
+            const logElement = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logElement.innerHTML += `[${timestamp}] ${message}<br>`;
+            logElement.scrollTop = logElement.scrollHeight;
+        }
+        
+        function updateStatus(message, type) {
+            const statusElement = document.getElementById('status');
+            statusElement.textContent = message;
+            statusElement.className = `status ${type}`;
+        }
+        
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+        }
+        
+        // 接続テスト
+        async function testConnection() {
+            updateStatus('🔄 HTTP接続テスト中...', 'info');
+            log('🔗 HTTP接続テストを開始');
+            
+            try {
+                const response = await fetch('http://192.168.0.8:3000/health');
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    updateStatus('✅ HTTP接続成功！', 'success');
+                    log(`✅ HTTP接続成功: ${JSON.stringify(data)}`);
+                    log(`📊 Status: ${response.status}`);
+                    log(`📝 Headers: ${JSON.stringify([...response.headers])}`);
+                } else {
+                    updateStatus(`❌ HTTP接続失敗 (${response.status})`, 'error');
+                    log(`❌ HTTP接続失敗: Status ${response.status}`);
+                }
+            } catch (error) {
+                updateStatus('❌ HTTP接続エラー', 'error');
+                log(`❌ HTTP接続エラー: ${error.message}`);
+                log(`🔍 Error type: ${error.name}`);
+                log(`📱 User Agent: ${navigator.userAgent}`);
+                
+                // ネットワーク情報を取得
+                if ('connection' in navigator) {
+                    log(`📶 Network: ${navigator.connection.effectiveType}`);
+                }
+            }
+        }
+        
+        // WebSocketテスト
+        function testWebSocket() {
+            updateStatus('🔄 WebSocket接続テスト中...', 'info');
+            log('📡 WebSocket接続テストを開始');
+            
+            const userId = 'mobile_test_' + Math.random().toString(36).substr(2, 9);
+            const ws = new WebSocket(`ws://192.168.0.8:3000/signaling?userId=${userId}`);
+            
+            ws.onopen = function() {
+                updateStatus('✅ WebSocket接続成功！', 'success');
+                log('✅ WebSocket接続が開かれました');
+                
+                // テストメッセージ送信
+                setTimeout(() => {
+                    ws.send(JSON.stringify({
+                        type: 'test',
+                        message: 'Hello from mobile!'
+                    }));
+                    log('📤 テストメッセージ送信');
+                }, 1000);
+            };
+            
+            ws.onmessage = function(event) {
+                log(`📥 メッセージ受信: ${event.data}`);
+                try {
+                    const data = JSON.parse(event.data);
+                    if (data.type === 'connected') {
+                        log(`🎉 サーバー確認: ユーザーID ${data.userId}`);
+                    }
+                } catch (e) {
+                    log(`📝 Raw message: ${event.data}`);
+                }
+            };
+            
+            ws.onerror = function(error) {
+                updateStatus('❌ WebSocket接続エラー', 'error');
+                log(`❌ WebSocketエラー: ${error}`);
+            };
+            
+            ws.onclose = function(event) {
+                log(`🔌 WebSocket切断: Code ${event.code}, Reason: ${event.reason}`);
+                if (event.code !== 1000) {
+                    updateStatus('❌ WebSocket異常切断', 'error');
+                }
+            };
+            
+            // 5秒後に接続をクローズ
+            setTimeout(() => {
+                if (ws.readyState === WebSocket.OPEN) {
+                    ws.close();
+                    log('🔌 テスト完了 - WebSocket切断');
+                }
+            }, 5000);
+        }
+        
+        // ページ読み込み時の自動チェック
+        window.onload = function() {
+            log('📱 モバイルテストページ読み込み完了');
+            log(`🌐 User Agent: ${navigator.userAgent}`);
+            log(`📍 Location: ${window.location.href}`);
+            
+            // 自動で接続テスト実行
+            setTimeout(testConnection, 1000);
+        };
+    </script>
+</body>
+</html>

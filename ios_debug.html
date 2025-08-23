@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>iOS接続診断</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 20px;
+            background: #f2f2f7;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+        }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #d1ecf1; color: #0c5460; }
+        button {
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 10px;
+            font-size: 16px;
+            margin: 10px 0;
+            width: 100%;
+        }
+        .log {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            padding: 10px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>📱 iOS接続診断ツール</h1>
+    
+    <div id="deviceInfo" class="info">
+        デバイス情報を取得中...
+    </div>
+    
+    <button onclick="testConnection()">🔗 接続テスト開始</button>
+    <button onclick="testRegistration()">📝 登録エンドポイントテスト</button>
+    <button onclick="clearLog()">🗑 ログクリア</button>
+    
+    <div id="results"></div>
+    <div id="log" class="log"></div>
+
+    <script>
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function addResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.textContent = message;
+            resultsDiv.appendChild(div);
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Show device info
+        document.getElementById('deviceInfo').innerHTML = `
+            📱 UserAgent: ${navigator.userAgent}<br>
+            🌐 現在のURL: ${window.location.href}<br>
+            📍 Host: ${window.location.host}<br>
+            🔗 Protocol: ${window.location.protocol}
+        `;
+
+        async function testConnection() {
+            log('🚀 接続テスト開始');
+            addResult('接続テスト中...', 'info');
+
+            const endpoints = [
+                '/health',
+                '/api/register'
+            ];
+
+            for (const endpoint of endpoints) {
+                try {
+                    log(`📡 Testing ${endpoint}...`);
+                    const response = await fetch(endpoint, {
+                        method: endpoint === '/api/register' ? 'POST' : 'GET',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: endpoint === '/api/register' ? JSON.stringify({
+                            deviceId: 'test-device',
+                            nickname: 'テストユーザー',
+                            gender: 'male',
+                            age: 25
+                        }) : undefined
+                    });
+
+                    if (response.ok) {
+                        const data = await response.text();
+                        log(`✅ ${endpoint}: ${response.status} - ${data.substring(0, 100)}...`);
+                        addResult(`✅ ${endpoint}: 接続成功 (${response.status})`, 'success');
+                    } else {
+                        log(`❌ ${endpoint}: ${response.status} - ${response.statusText}`);
+                        addResult(`❌ ${endpoint}: 接続失敗 (${response.status})`, 'error');
+                    }
+                } catch (error) {
+                    log(`❌ ${endpoint}: ${error.message}`);
+                    addResult(`❌ ${endpoint}: エラー - ${error.message}`, 'error');
+                }
+            }
+        }
+
+        async function testRegistration() {
+            log('📝 登録テスト開始');
+            addResult('登録テスト中...', 'info');
+
+            const testData = {
+                deviceId: 'ios-test-' + Date.now(),
+                nickname: 'iOSテストユーザー',
+                gender: 'female',
+                age: 22,
+                region: '東京'
+            };
+
+            try {
+                log(`📤 Sending: ${JSON.stringify(testData)}`);
+                
+                const response = await fetch('/api/register', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testData)
+                });
+
+                const responseText = await response.text();
+                log(`📨 Response status: ${response.status}`);
+                log(`📨 Response headers: ${JSON.stringify(Object.fromEntries(response.headers))}`);
+                log(`📨 Response body: ${responseText}`);
+
+                if (response.ok) {
+                    const data = JSON.parse(responseText);
+                    addResult(`✅ 登録成功: ${data.data?.userId || 'No User ID'}`, 'success');
+                } else {
+                    addResult(`❌ 登録失敗: ${response.status} - ${responseText}`, 'error');
+                }
+            } catch (error) {
+                log(`❌ Registration error: ${error.message}`);
+                addResult(`❌ 登録エラー: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run basic test on load
+        window.onload = function() {
+            log('📱 iOS診断ツール開始');
+            testConnection();
+        };
+    </script>
+</body>
+</html>

@@ -14,7 +14,7 @@ class MatchingService {
     // Update user status to matching
     const db = database.getDb();
     await db.collection('users').updateOne(
-      { _id: userId },
+      { _id: userId as any },
       { 
         $set: { 
           'status.current': 'matching',
@@ -40,7 +40,7 @@ class MatchingService {
     // Update user status back to online
     const db = database.getDb();
     await db.collection('users').updateOne(
-      { _id: userId },
+      { _id: userId as any },
       { 
         $set: { 
           'status.current': 'online',
@@ -74,8 +74,8 @@ class MatchingService {
     try {
       // Get user profiles
       const [user, partner] = await Promise.all([
-        db.collection('users').findOne({ _id: userId }),
-        db.collection('users').findOne({ _id: partnerId })
+        db.collection('users').findOne({ _id: userId as any }),
+        db.collection('users').findOne({ _id: partnerId as any })
       ]);
 
       if (!user || !partner) {
@@ -95,7 +95,7 @@ class MatchingService {
         updatedAt: new Date()
       };
 
-      await db.collection('calls').insertOne({ ...call, _id: callId });
+      await db.collection('calls').insertOne({ ...call, _id: callId as any });
 
       // Remove both users from matching queue
       this.matchingQueue.delete(userId);
@@ -104,7 +104,7 @@ class MatchingService {
       // Update user statuses to calling
       await Promise.all([
         db.collection('users').updateOne(
-          { _id: userId },
+          { _id: userId as any },
           { 
             $set: { 
               'status.current': 'calling',
@@ -114,7 +114,7 @@ class MatchingService {
           }
         ),
         db.collection('users').updateOne(
-          { _id: partnerId },
+          { _id: partnerId as any },
           { 
             $set: { 
               'status.current': 'calling',
@@ -218,13 +218,13 @@ class MatchingService {
     const db = database.getDb();
     
     try {
-      const call = await db.collection('calls').findOne({ _id: callId });
+      const call = await db.collection('calls').findOne({ _id: callId as any });
       if (!call || call.status !== 'connecting') {
         return false;
       }
 
       await db.collection('calls').updateOne(
-        { _id: callId },
+        { _id: callId as any },
         { 
           $set: { 
             status: 'active',
@@ -244,13 +244,13 @@ class MatchingService {
     const db = database.getDb();
     
     try {
-      const call = await db.collection('calls').findOne({ _id: callId });
+      const call = await db.collection('calls').findOne({ _id: callId as any });
       if (!call || call.status !== 'connecting') {
         return false;
       }
 
       await db.collection('calls').updateOne(
-        { _id: callId },
+        { _id: callId as any },
         { 
           $set: { 
             status: 'cancelled',
@@ -263,7 +263,7 @@ class MatchingService {
       // Return both users to online status
       await Promise.all([
         db.collection('users').updateOne(
-          { _id: call.userId },
+          { _id: call.userId as any },
           { 
             $set: { 
               'status.current': 'online',
@@ -273,7 +273,7 @@ class MatchingService {
           }
         ),
         db.collection('users').updateOne(
-          { _id: call.partnerId },
+          { _id: call.partnerId as any },
           { 
             $set: { 
               'status.current': 'online',

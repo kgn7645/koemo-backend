@@ -163,6 +163,7 @@ async function startServer() {
                 region: message.region || 'Unknown',
                 deviceId: message.deviceId || userId
               };
+              console.log('User profile:', userProfile);
               await matchingService.joinMatchingQueue(userId, ws);
               break;
               

@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOEMO モバイルマッチング音声テスト</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 20px;
+            background: #f2f2f7;
+            margin: 0;
+        }
+        .container {
+            max-width: 400px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #007AFF;
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .status {
+            background: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+        .status.connected { background: #d4edda; }
+        .status.error { background: #f8d7da; }
+        .status.warning { background: #fff3cd; }
+        .status.matching { background: #ffeaa7; }
+        
+        button {
+            width: 100%;
+            background: #007AFF;
+            color: white;
+            border: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-size: 16px;
+            margin: 10px 0;
+            cursor: pointer;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        button.danger {
+            background: #ff3b30;
+        }
+        button.success {
+            background: #34c759;
+        }
+        button.warning {
+            background: #ff9500;
+        }
+        
+        .log {
+            background: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            border: 1px solid #ddd;
+        }
+        
+        .user-id {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 8px;
+            margin: 10px 0;
+            font-family: monospace;
+            font-size: 14px;
+            word-break: break-all;
+        }
+        
+        .volume-indicator {
+            width: 100%;
+            height: 20px;
+            background: #e9ecef;
+            border-radius: 10px;
+            margin: 10px 0;
+            overflow: hidden;
+        }
+        .volume-bar {
+            height: 100%;
+            background: #34c759;
+            width: 0%;
+            transition: width 0.1s;
+        }
+        
+        .partner-info {
+            background: #fff;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 KOEMO モバイルマッチング</h1>
+        
+        <div class="user-id">
+            ユーザーID: <span id="userId">生成中...</span>
+        </div>
+        
+        <div id="connectionStatus" class="status">
+            📡 接続準備中...
+        </div>
+        
+        <button id="connectBtn" onclick="connectWebSocket()">WebSocket接続</button>
+        <button id="startMatchingBtn" onclick="startMatching()" disabled>マッチング開始</button>
+        <button id="cancelMatchingBtn" onclick="cancelMatching()" disabled style="display:none;">マッチングキャンセル</button>
+        <button id="endCallBtn" onclick="endCall()" disabled style="display:none;">通話終了</button>
+        
+        <div id="matchingStatus" class="status" style="display:none;">
+            マッチング状態: 待機中
+        </div>
+        
+        <div id="partnerInfo" class="partner-info">
+            <div>通話相手: <span id="partnerName">-</span></div>
+            <div>通話時間: <span id="callDuration">00:00</span></div>
+        </div>
+        
+        <div id="volumeContainer" style="display:none;">
+            <div>音量レベル:</div>
+            <div class="volume-indicator">
+                <div id="volumeBar" class="volume-bar"></div>
+            </div>
+        </div>
+        
+        <div id="log" class="log"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let localStream = null;
+        let remoteStream = null;
+        let peerConnection = null;
+        let isMatching = false;
+        let inCall = false;
+        let userId = 'mobile_' + Math.random().toString(36).substr(2, 9);
+        let callStartTime = null;
+        let callTimer = null;
+        
+        // Initialize
+        document.getElementById('userId').textContent = userId;
+        
+        function log(message) {
+            const logDiv = document.getElementById('log');
+            const timestamp = new Date().toLocaleTimeString();
+            logDiv.innerHTML += `[${timestamp}] ${message}\n`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+            console.log(message);
+        }
+        
+        function updateStatus(message, type = 'normal') {
+            const statusDiv = document.getElementById('connectionStatus');
+            statusDiv.textContent = message;
+            statusDiv.className = 'status';
+            if (type === 'connected') statusDiv.classList.add('connected');
+            if (type === 'error') statusDiv.classList.add('error');
+            if (type === 'warning') statusDiv.classList.add('warning');
+            if (type === 'matching') statusDiv.classList.add('matching');
+        }
+        
+        function updateButtons() {
+            document.getElementById('connectBtn').disabled = (ws && ws.readyState === WebSocket.OPEN);
+            document.getElementById('startMatchingBtn').disabled = !(ws && ws.readyState === WebSocket.OPEN) || isMatching || inCall;
+            document.getElementById('cancelMatchingBtn').style.display = isMatching ? 'block' : 'none';
+            document.getElementById('endCallBtn').style.display = inCall ? 'block' : 'none';
+        }
+        
+        async function connectWebSocket() {
+            try {
+                log('🔌 WebSocket接続を開始...');
+                updateStatus('🔌 WebSocket接続中...', 'warning');
+                
+                const wsUrl = `ws://192.168.0.8:3000/signaling?userId=${userId}`;
+                log(`接続先: ${wsUrl}`);
+                
+                ws = new WebSocket(wsUrl);
+                
+                ws.onopen = function() {
+                    log('✅ WebSocket接続成功');
+                    updateStatus('✅ WebSocket接続済み', 'connected');
+                    updateButtons();
+                };
+                
+                ws.onmessage = function(event) {
+                    try {
+                        const message = JSON.parse(event.data);
+                        log(`📨 受信: ${message.type}`);
+                        handleWebSocketMessage(message);
+                    } catch (error) {
+                        log(`❌ メッセージ解析エラー: ${error.message}`);
+                    }
+                };
+                
+                ws.onclose = function() {
+                    log('❌ WebSocket接続が閉じられました');
+                    updateStatus('❌ WebSocket切断', 'error');
+                    
+                    // 通話中の場合は自動再接続を試行
+                    if (inCall) {
+                        log('🔄 通話中のため再接続を試行...');
+                        setTimeout(() => {
+                            if (inCall) {
+                                connectWebSocket();
+                            }
+                        }, 2000);
+                    }
+                    
+                    updateButtons();
+                };
+                
+                ws.onerror = function(error) {
+                    log(`❌ WebSocketエラー: ${error}`);
+                    updateStatus('❌ WebSocket接続エラー', 'error');
+                    updateButtons();
+                };
+                
+            } catch (error) {
+                log(`❌ WebSocket接続エラー: ${error.message}`);
+                updateStatus('❌ 接続失敗', 'error');
+            }
+        }
+        
+        function handleWebSocketMessage(message) {
+            switch (message.type) {
+                case 'connected':
+                    log(`🎯 サーバー接続確認: ${message.userId}`);
+                    break;
+                    
+                case 'matching-status':
+                    log(`🔍 マッチング状況: ${message.queueSize}人待機中`);
+                    document.getElementById('matchingStatus').style.display = 'block';
+                    document.getElementById('matchingStatus').textContent = `マッチング中... (${message.queueSize}人待機)`;
+                    break;
+                    
+                case 'match-found':
+                    log(`🎉 マッチ成功! 相手: ${message.partnerId}`);
+                    document.getElementById('partnerInfo').style.display = 'block';
+                    document.getElementById('partnerName').textContent = message.partnerId;
+                    isMatching = false;
+                    inCall = true;
+                    updateButtons();
+                    updateStatus('📞 通話準備中...', 'warning');
+                    startCall();
+                    
+                    // マッチ成功後、少し待ってからOfferを作成（モバイル側から）
+                    setTimeout(async () => {
+                        if (peerConnection && peerConnection.localDescription === null) {
+                            try {
+                                const offer = await peerConnection.createOffer();
+                                await peerConnection.setLocalDescription(offer);
+                                
+                                if (ws && ws.readyState === WebSocket.OPEN) {
+                                    ws.send(JSON.stringify({
+                                        type: 'offer',
+                                        offer: offer
+                                    }));
+                                    log('📤 Offer送信（モバイル発信）');
+                                }
+                            } catch (error) {
+                                log(`❌ Offer作成エラー: ${error.message}`);
+                            }
+                        }
+                    }, 1000);
+                    break;
+                    
+                case 'match-cancelled':
+                    log('❌ マッチングがキャンセルされました');
+                    isMatching = false;
+                    document.getElementById('matchingStatus').style.display = 'none';
+                    updateButtons();
+                    updateStatus('✅ WebSocket接続済み', 'connected');
+                    break;
+                    
+                case 'call-ended':
+                    log('📴 通話が終了しました');
+                    endCall();
+                    break;
+                    
+                case 'offer':
+                    log('📥 Offer受信');
+                    handleWebRTCOffer(message);
+                    break;
+                    
+                case 'answer':
+                    log('📥 Answer受信');
+                    handleWebRTCAnswer(message);
+                    break;
+                    
+                case 'ice-candidate':
+                    log('🧊 ICE候補受信');
+                    handleWebRTCIceCandidate(message);
+                    break;
+                    
+                default:
+                    log(`❓ 不明なメッセージ: ${message.type}`);
+            }
+        }
+        
+        async function startMatching() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('❌ WebSocket未接続');
+                return;
+            }
+            
+            try {
+                log('🎯 マッチング開始...');
+                isMatching = true;
+                updateButtons();
+                
+                const message = {
+                    type: 'start-matching',
+                    profile: {
+                        nickname: 'モバイルユーザー',
+                        gender: 'unknown',
+                        age: 25,
+                        region: 'Mobile'
+                    }
+                };
+                
+                ws.send(JSON.stringify(message));
+                log('📤 マッチングリクエスト送信');
+                updateStatus('🔍 マッチング中...', 'matching');
+                
+            } catch (error) {
+                log(`❌ マッチング開始エラー: ${error.message}`);
+                isMatching = false;
+                updateButtons();
+            }
+        }
+        
+        function cancelMatching() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            
+            try {
+                ws.send(JSON.stringify({ type: 'cancel-matching' }));
+                log('🚫 マッチングキャンセル');
+                isMatching = false;
+                document.getElementById('matchingStatus').style.display = 'none';
+                updateButtons();
+                updateStatus('✅ WebSocket接続済み', 'connected');
+            } catch (error) {
+                log(`❌ キャンセルエラー: ${error.message}`);
+            }
+        }
+        
+        async function startCall() {
+            try {
+                log('🎤 音声デバイス初期化...');
+                
+                // マイクアクセス許可
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    } 
+                });
+                
+                log('✅ マイクアクセス許可取得');
+                
+                // 音量表示
+                document.getElementById('volumeContainer').style.display = 'block';
+                setupVolumeIndicator();
+                
+                // WebRTC初期化
+                initWebRTC();
+                
+                // 通話開始時間記録
+                callStartTime = new Date();
+                startCallTimer();
+                
+                updateStatus('📞 通話中', 'connected');
+                
+            } catch (error) {
+                log(`❌ 音声初期化エラー: ${error.message}`);
+                updateStatus('❌ 音声エラー', 'error');
+            }
+        }
+        
+        function startCallTimer() {
+            callTimer = setInterval(() => {
+                if (callStartTime) {
+                    const elapsed = Math.floor((new Date() - callStartTime) / 1000);
+                    const minutes = Math.floor(elapsed / 60);
+                    const seconds = elapsed % 60;
+                    document.getElementById('callDuration').textContent = 
+                        `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
+        }
+        
+        function initWebRTC() {
+            // WebRTC設定
+            const configuration = {
+                iceServers: [
+                    { urls: 'stun:stun.l.google.com:19302' }
+                ]
+            };
+            
+            peerConnection = new RTCPeerConnection(configuration);
+            
+            // ローカルストリームを追加
+            localStream.getTracks().forEach(track => {
+                peerConnection.addTrack(track, localStream);
+            });
+            
+            // リモートストリーム受信
+            peerConnection.ontrack = function(event) {
+                log('🎵 リモート音声受信');
+                remoteStream = event.streams[0];
+                
+                // リモート音声を再生
+                const audio = new Audio();
+                audio.srcObject = remoteStream;
+                audio.play().catch(e => log(`音声再生エラー: ${e.message}`));
+            };
+            
+            // ICE候補生成
+            peerConnection.onicecandidate = function(event) {
+                if (event.candidate) {
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: event.candidate
+                        }));
+                        log('🧊 ICE候補送信');
+                    } else {
+                        log('❌ WebSocket切断中 - ICE候補送信失敗');
+                    }
+                }
+            };
+            
+            log('🔗 WebRTC初期化完了');
+        }
+        
+        async function handleWebRTCOffer(message) {
+            try {
+                if (!peerConnection) initWebRTC();
+                
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.offer));
+                log('📥 Offer設定完了');
+                
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({
+                        type: 'answer',
+                        answer: answer
+                    }));
+                    log('📤 Answer送信');
+                } else {
+                    log('❌ WebSocket切断中 - Answer送信失敗');
+                }
+                
+            } catch (error) {
+                log(`❌ Offer処理エラー: ${error.message}`);
+            }
+        }
+        
+        async function handleWebRTCAnswer(message) {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(message.answer));
+                log('📥 Answer設定完了');
+            } catch (error) {
+                log(`❌ Answer処理エラー: ${error.message}`);
+            }
+        }
+        
+        async function handleWebRTCIceCandidate(message) {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(message.candidate));
+                log('🧊 ICE候補追加完了');
+            } catch (error) {
+                log(`❌ ICE候補エラー: ${error.message}`);
+            }
+        }
+        
+        function setupVolumeIndicator() {
+            if (!localStream) return;
+            
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaStreamSource(localStream);
+            const analyser = audioContext.createAnalyser();
+            
+            source.connect(analyser);
+            analyser.fftSize = 256;
+            
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            function updateVolume() {
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                const volumePercent = (average / 255) * 100;
+                
+                document.getElementById('volumeBar').style.width = volumePercent + '%';
+                
+                if (inCall) {
+                    requestAnimationFrame(updateVolume);
+                }
+            }
+            
+            updateVolume();
+        }
+        
+        function endCall() {
+            try {
+                log('📴 通話終了処理...');
+                
+                if (callTimer) {
+                    clearInterval(callTimer);
+                    callTimer = null;
+                }
+                
+                if (localStream) {
+                    localStream.getTracks().forEach(track => track.stop());
+                    localStream = null;
+                }
+                
+                if (peerConnection) {
+                    peerConnection.close();
+                    peerConnection = null;
+                }
+                
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify({ type: 'end-call' }));
+                }
+                
+                inCall = false;
+                isMatching = false;
+                callStartTime = null;
+                
+                document.getElementById('partnerInfo').style.display = 'none';
+                document.getElementById('volumeContainer').style.display = 'none';
+                document.getElementById('matchingStatus').style.display = 'none';
+                
+                updateButtons();
+                updateStatus('✅ WebSocket接続済み', 'connected');
+                
+                log('✅ 通話終了完了');
+                
+            } catch (error) {
+                log(`❌ 通話終了エラー: ${error.message}`);
+            }
+        }
+        
+        // 自動接続
+        window.onload = function() {
+            log('📱 モバイルマッチングテスト開始');
+            updateButtons();
+        };
+        
+        // Page visibility API
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden) {
+                log('📵 ページが非表示になりました');
+            } else {
+                log('📱 ページが表示されました');
+            }
+        });
+    </script>
+</body>
+</html>

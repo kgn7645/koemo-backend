@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOEMO Test Pages</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 20px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 {
+            color: #007AFF;
+        }
+        .link-list {
+            list-style: none;
+            padding: 0;
+        }
+        .link-list li {
+            margin: 10px 0;
+        }
+        .link-list a {
+            display: block;
+            padding: 15px 20px;
+            background: #f0f0f0;
+            border-radius: 10px;
+            text-decoration: none;
+            color: #333;
+            font-weight: 500;
+        }
+        .link-list a:hover {
+            background: #007AFF;
+            color: white;
+        }
+        .status {
+            background: #e8f5e9;
+            border: 1px solid #4caf50;
+            color: #2e7d32;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🎯 KOEMO テストページ一覧</h1>
+    
+    <div class="status">
+        ✅ サーバー稼働中 - IP: 192.168.0.8:3000
+    </div>
+    
+    <ul class="link-list">
+        <li><a href="/health">🏥 ヘルスチェック (JSON)</a></li>
+        <li><a href="/ios_debug.html">📱 iOS接続診断ツール</a></li>
+        <li><a href="/mobile_test.html">📱 モバイル接続テスト</a></li>
+        <li><a href="/network_debug.html">🔧 ネットワーク診断ツール</a></li>
+        <li><a href="/test_matching.html">🎯 マッチング機能テスト</a></li>
+        <li><a href="/test_webrtc.html">📞 WebRTC基本テスト</a></li>
+    </ul>
+    
+    <p style="margin-top: 30px; color: #666;">
+        iPhoneからアクセスする場合は、同じWi-Fiネットワークに接続して、
+        <strong>http://192.168.0.8:3000</strong> にアクセスしてください。
+    </p>
+</body>
+</html>

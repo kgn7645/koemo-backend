@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOEMO Audio WebRTC Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .status {
+            text-align: center;
+            margin: 20px 0;
+            padding: 15px;
+            border-radius: 5px;
+            background: #e8f4f8;
+            color: #0066cc;
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            justify-content: center;
+            margin: 20px 0;
+        }
+        button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            background: #0066cc;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .audio-level {
+            margin: 20px 0;
+            text-align: center;
+        }
+        .level-bar {
+            width: 100%;
+            height: 30px;
+            background: #eee;
+            border-radius: 15px;
+            overflow: hidden;
+            position: relative;
+        }
+        .level-fill {
+            height: 100%;
+            background: #4CAF50;
+            width: 0%;
+            transition: width 0.1s;
+        }
+        .logs {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border-radius: 5px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+            background: white;
+            border-radius: 3px;
+        }
+        .error { color: #d32f2f; }
+        .success { color: #2e7d32; }
+        .info { color: #1976d2; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎙️ KOEMO Audio WebRTC Test</h1>
+        
+        <div class="status" id="status">Disconnected</div>
+        
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="startCallBtn" onclick="startCall()" disabled>Start Call</button>
+            <button id="muteBtn" onclick="toggleMute()" disabled>Mute</button>
+            <button id="endCallBtn" onclick="endCall()" disabled>End Call</button>
+        </div>
+        
+        <div class="audio-level">
+            <h3>Local Audio Level</h3>
+            <div class="level-bar">
+                <div class="level-fill" id="localLevel"></div>
+            </div>
+        </div>
+        
+        <div class="audio-level">
+            <h3>Remote Audio Level</h3>
+            <div class="level-bar">
+                <div class="level-fill" id="remoteLevel"></div>
+            </div>
+        </div>
+        
+        <div class="logs" id="logs"></div>
+    </div>
+
+    <script>
+        let ws = null;
+        let pc = null;
+        let localStream = null;
+        let isMuted = false;
+        let roomId = 'test-room-' + Date.now();
+        let userId = 'test-user-' + Math.random().toString(36).substr(2, 9);
+        
+        function log(message, type = 'info') {
+            const logs = document.getElementById('logs');
+            const entry = document.createElement('div');
+            entry.className = `log-entry ${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            logs.insertBefore(entry, logs.firstChild);
+        }
+        
+        function updateStatus(message, color = '#0066cc') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.style.color = color;
+        }
+        
+        async function connect() {
+            try {
+                // Connect to WebSocket
+                ws = new WebSocket(`ws://localhost:3000/ws?token=test-token`);
+                
+                ws.onopen = () => {
+                    log('WebSocket connected', 'success');
+                    updateStatus('Connected - Ready to start call', '#2e7d32');
+                    document.getElementById('connectBtn').disabled = true;
+                    document.getElementById('startCallBtn').disabled = false;
+                };
+                
+                ws.onmessage = async (event) => {
+                    const data = JSON.parse(event.data);
+                    log(`Received: ${data.type}`, 'info');
+                    
+                    switch(data.type) {
+                        case 'offer':
+                            await handleOffer(data.offer, data.from);
+                            break;
+                        case 'answer':
+                            await handleAnswer(data.answer, data.from);
+                            break;
+                        case 'ice-candidate':
+                            await handleIceCandidate(data.candidate, data.from);
+                            break;
+                        case 'room-ready':
+                            log('Room ready - both participants joined', 'success');
+                            await createOffer();
+                            break;
+                    }
+                };
+                
+                ws.onerror = (error) => {
+                    log(`WebSocket error: ${error}`, 'error');
+                };
+                
+                ws.onclose = () => {
+                    log('WebSocket disconnected', 'error');
+                    updateStatus('Disconnected', '#d32f2f');
+                    resetUI();
+                };
+                
+            } catch (error) {
+                log(`Connection error: ${error}`, 'error');
+            }
+        }
+        
+        async function startCall() {
+            try {
+                // Get user media
+                localStream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }, 
+                    video: false 
+                });
+                log('Got local audio stream', 'success');
+                
+                // Monitor local audio level
+                monitorAudioLevel(localStream, 'localLevel');
+                
+                // Create peer connection
+                pc = new RTCPeerConnection({
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
+                    ]
+                });
+                
+                // Add local stream
+                localStream.getTracks().forEach(track => {
+                    pc.addTrack(track, localStream);
+                });
+                
+                // Handle remote stream
+                pc.ontrack = (event) => {
+                    log('Received remote track', 'success');
+                    const remoteAudio = new Audio();
+                    remoteAudio.srcObject = event.streams[0];
+                    remoteAudio.play();
+                    
+                    // Monitor remote audio level
+                    monitorAudioLevel(event.streams[0], 'remoteLevel');
+                };
+                
+                // Handle ICE candidates
+                pc.onicecandidate = (event) => {
+                    if (event.candidate) {
+                        ws.send(JSON.stringify({
+                            type: 'ice-candidate',
+                            candidate: {
+                                candidate: event.candidate.candidate,
+                                sdpMLineIndex: event.candidate.sdpMLineIndex,
+                                sdpMid: event.candidate.sdpMid
+                            }
+                        }));
+                    }
+                };
+                
+                // Join room
+                ws.send(JSON.stringify({
+                    type: 'join-room',
+                    roomId: roomId
+                }));
+                
+                updateStatus('Joining room...', '#ff9800');
+                document.getElementById('startCallBtn').disabled = true;
+                document.getElementById('muteBtn').disabled = false;
+                document.getElementById('endCallBtn').disabled = false;
+                
+            } catch (error) {
+                log(`Start call error: ${error}`, 'error');
+            }
+        }
+        
+        async function createOffer() {
+            try {
+                const offer = await pc.createOffer();
+                await pc.setLocalDescription(offer);
+                
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    offer: offer.sdp
+                }));
+                
+                log('Sent offer', 'success');
+                updateStatus('Calling...', '#ff9800');
+            } catch (error) {
+                log(`Create offer error: ${error}`, 'error');
+            }
+        }
+        
+        async function handleOffer(offerSdp, from) {
+            try {
+                await pc.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+                const answer = await pc.createAnswer();
+                await pc.setLocalDescription(answer);
+                
+                ws.send(JSON.stringify({
+                    type: 'answer',
+                    answer: answer.sdp
+                }));
+                
+                log('Sent answer', 'success');
+                updateStatus('In Call', '#2e7d32');
+            } catch (error) {
+                log(`Handle offer error: ${error}`, 'error');
+            }
+        }
+        
+        async function handleAnswer(answerSdp, from) {
+            try {
+                await pc.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                log('Remote answer set', 'success');
+                updateStatus('In Call', '#2e7d32');
+            } catch (error) {
+                log(`Handle answer error: ${error}`, 'error');
+            }
+        }
+        
+        async function handleIceCandidate(candidate, from) {
+            try {
+                await pc.addIceCandidate(candidate);
+                log('Added ICE candidate', 'success');
+            } catch (error) {
+                log(`Handle ICE candidate error: ${error}`, 'error');
+            }
+        }
+        
+        function toggleMute() {
+            if (localStream) {
+                const audioTrack = localStream.getAudioTracks()[0];
+                isMuted = !isMuted;
+                audioTrack.enabled = !isMuted;
+                document.getElementById('muteBtn').textContent = isMuted ? 'Unmute' : 'Mute';
+                log(`Microphone ${isMuted ? 'muted' : 'unmuted'}`, 'info');
+            }
+        }
+        
+        function endCall() {
+            if (pc) {
+                pc.close();
+                pc = null;
+            }
+            
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+                localStream = null;
+            }
+            
+            if (ws) {
+                ws.send(JSON.stringify({ type: 'leave-room' }));
+            }
+            
+            document.getElementById('localLevel').style.width = '0%';
+            document.getElementById('remoteLevel').style.width = '0%';
+            
+            updateStatus('Call ended', '#666');
+            resetUI();
+            log('Call ended', 'info');
+        }
+        
+        function resetUI() {
+            document.getElementById('connectBtn').disabled = false;
+            document.getElementById('startCallBtn').disabled = true;
+            document.getElementById('muteBtn').disabled = true;
+            document.getElementById('endCallBtn').disabled = true;
+        }
+        
+        function monitorAudioLevel(stream, levelId) {
+            const audioContext = new AudioContext();
+            const analyser = audioContext.createAnalyser();
+            const microphone = audioContext.createMediaStreamSource(stream);
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            
+            analyser.smoothingTimeConstant = 0.8;
+            analyser.fftSize = 256;
+            
+            microphone.connect(analyser);
+            
+            function updateLevel() {
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+                const normalizedLevel = Math.min(100, (average / 255) * 200);
+                
+                document.getElementById(levelId).style.width = normalizedLevel + '%';
+                
+                requestAnimationFrame(updateLevel);
+            }
+            
+            updateLevel();
+        }
+    </script>
+</body>
+</html>

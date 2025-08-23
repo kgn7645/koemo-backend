@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOEMO WebRTC Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .user-section {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+        .user-section h2 {
+            margin-top: 0;
+            color: #007AFF;
+        }
+        button {
+            background-color: #007AFF;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #005abb;
+        }
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .status.connected {
+            background-color: #d4f4dd;
+            color: #2e7d32;
+        }
+        .status.disconnected {
+            background-color: #ffebee;
+            color: #c62828;
+        }
+        .status.info {
+            background-color: #e3f2fd;
+            color: #1565c0;
+        }
+        .log {
+            background-color: #f5f5f5;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            height: 150px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+        .controls {
+            margin: 20px 0;
+        }
+        .room-info {
+            background-color: #fffde7;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        audio {
+            width: 100%;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎯 KOEMO WebRTC テスト</h1>
+        
+        <div class="room-info">
+            <strong>ルームID:</strong> <span id="roomId">test-room-123</span>
+            <button onclick="copyRoomId()">コピー</button>
+        </div>
+
+        <!-- User 1 Section -->
+        <div class="user-section">
+            <h2>ユーザー1 (発信者)</h2>
+            <div class="status disconnected" id="status1">未接続</div>
+            
+            <div class="controls">
+                <button id="connect1" onclick="connectUser1()">接続</button>
+                <button id="joinRoom1" onclick="joinRoom1()" disabled>ルームに参加</button>
+                <button id="call1" onclick="startCall1()" disabled>通話開始</button>
+                <button id="hangup1" onclick="hangup1()" disabled>切断</button>
+            </div>
+            
+            <div>
+                <strong>ミュート:</strong>
+                <button id="mute1" onclick="toggleMute1()" disabled>ミュート</button>
+            </div>
+            
+            <audio id="remoteAudio1" controls></audio>
+            
+            <div class="log" id="log1"></div>
+        </div>
+
+        <!-- User 2 Section -->
+        <div class="user-section">
+            <h2>ユーザー2 (受信者)</h2>
+            <div class="status disconnected" id="status2">未接続</div>
+            
+            <div class="controls">
+                <button id="connect2" onclick="connectUser2()">接続</button>
+                <button id="joinRoom2" onclick="joinRoom2()" disabled>ルームに参加</button>
+                <button id="answer2" onclick="answerCall2()" disabled>通話応答</button>
+                <button id="hangup2" onclick="hangup2()" disabled>切断</button>
+            </div>
+            
+            <div>
+                <strong>ミュート:</strong>
+                <button id="mute2" onclick="toggleMute2()" disabled>ミュート</button>
+            </div>
+            
+            <audio id="remoteAudio2" controls></audio>
+            
+            <div class="log" id="log2"></div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const WS_URL = 'ws://localhost:3000/signaling';
+        const ROOM_ID = 'test-room-123';
+        
+        // User 1 state
+        let ws1 = null;
+        let pc1 = null;
+        let localStream1 = null;
+        let isMuted1 = false;
+        
+        // User 2 state
+        let ws2 = null;
+        let pc2 = null;
+        let localStream2 = null;
+        let isMuted2 = false;
+        
+        // ICE servers configuration
+        const iceServers = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+        
+        // Utility functions
+        function log1(message) {
+            const logEl = document.getElementById('log1');
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${time}] ${message}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function log2(message) {
+            const logEl = document.getElementById('log2');
+            const time = new Date().toLocaleTimeString();
+            logEl.innerHTML += `[${time}] ${message}<br>`;
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+        
+        function updateStatus1(connected, message) {
+            const statusEl = document.getElementById('status1');
+            statusEl.className = connected ? 'status connected' : 'status disconnected';
+            statusEl.textContent = message;
+        }
+        
+        function updateStatus2(connected, message) {
+            const statusEl = document.getElementById('status2');
+            statusEl.className = connected ? 'status connected' : 'status disconnected';
+            statusEl.textContent = message;
+        }
+        
+        function copyRoomId() {
+            navigator.clipboard.writeText(ROOM_ID);
+            alert('ルームIDをコピーしました');
+        }
+        
+        // User 1 functions
+        async function connectUser1() {
+            log1('WebSocketに接続中...');
+            
+            ws1 = new WebSocket(`${WS_URL}?userId=user1`);
+            
+            ws1.onopen = () => {
+                log1('WebSocket接続成功');
+                updateStatus1(true, 'シグナリングサーバーに接続済み');
+                document.getElementById('connect1').disabled = true;
+                document.getElementById('joinRoom1').disabled = false;
+            };
+            
+            ws1.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+                log1(`受信: ${message.type}`);
+                
+                switch (message.type) {
+                    case 'connected':
+                        log1(`ユーザーID: ${message.userId}`);
+                        break;
+                        
+                    case 'joined-room':
+                        log1(`ルームに参加 (${message.participantCount}人)`);
+                        if (message.participantCount === 2) {
+                            document.getElementById('call1').disabled = false;
+                        }
+                        break;
+                        
+                    case 'room-ready':
+                        log1('ルーム準備完了！通話を開始できます');
+                        document.getElementById('call1').disabled = false;
+                        break;
+                        
+                    case 'answer':
+                        log1('Answerを受信');
+                        const answer = new RTCSessionDescription({
+                            type: 'answer',
+                            sdp: message.answer
+                        });
+                        await pc1.setRemoteDescription(answer);
+                        break;
+                        
+                    case 'ice-candidate':
+                        log1('ICE candidateを受信');
+                        if (pc1) {
+                            await pc1.addIceCandidate(new RTCIceCandidate(message.candidate));
+                        }
+                        break;
+                        
+                    case 'participant-left':
+                        log1('相手が退出しました');
+                        hangup1();
+                        break;
+                }
+            };
+            
+            ws1.onerror = (error) => {
+                log1(`エラー: ${error}`);
+                updateStatus1(false, 'エラーが発生しました');
+            };
+            
+            ws1.onclose = () => {
+                log1('WebSocket切断');
+                updateStatus1(false, '未接続');
+            };
+        }
+        
+        function joinRoom1() {
+            if (!ws1) return;
+            
+            log1(`ルーム ${ROOM_ID} に参加中...`);
+            ws1.send(JSON.stringify({
+                type: 'join-room',
+                roomId: ROOM_ID
+            }));
+            
+            document.getElementById('joinRoom1').disabled = true;
+        }
+        
+        async function startCall1() {
+            log1('通話を開始...');
+            
+            // Get user media
+            try {
+                localStream1 = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                log1('マイクアクセス許可');
+            } catch (error) {
+                log1(`マイクエラー: ${error.message}`);
+                return;
+            }
+            
+            // Create peer connection
+            pc1 = new RTCPeerConnection(iceServers);
+            
+            // Add local stream
+            localStream1.getTracks().forEach(track => {
+                pc1.addTrack(track, localStream1);
+            });
+            
+            // Handle remote stream
+            pc1.ontrack = (event) => {
+                log1('リモートストリーム受信');
+                const remoteAudio = document.getElementById('remoteAudio1');
+                remoteAudio.srcObject = event.streams[0];
+            };
+            
+            // Handle ICE candidates
+            pc1.onicecandidate = (event) => {
+                if (event.candidate) {
+                    log1('ICE candidate生成');
+                    ws1.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            // Create offer
+            const offer = await pc1.createOffer();
+            await pc1.setLocalDescription(offer);
+            
+            log1('Offerを送信');
+            ws1.send(JSON.stringify({
+                type: 'offer',
+                offer: offer.sdp
+            }));
+            
+            document.getElementById('call1').disabled = true;
+            document.getElementById('hangup1').disabled = false;
+            document.getElementById('mute1').disabled = false;
+            updateStatus1(true, '通話中');
+        }
+        
+        function hangup1() {
+            log1('通話を終了...');
+            
+            if (localStream1) {
+                localStream1.getTracks().forEach(track => track.stop());
+                localStream1 = null;
+            }
+            
+            if (pc1) {
+                pc1.close();
+                pc1 = null;
+            }
+            
+            if (ws1 && ws1.readyState === WebSocket.OPEN) {
+                ws1.send(JSON.stringify({ type: 'leave-room' }));
+            }
+            
+            document.getElementById('remoteAudio1').srcObject = null;
+            document.getElementById('call1').disabled = true;
+            document.getElementById('hangup1').disabled = true;
+            document.getElementById('mute1').disabled = true;
+            document.getElementById('joinRoom1').disabled = false;
+            
+            updateStatus1(true, 'シグナリングサーバーに接続済み');
+        }
+        
+        function toggleMute1() {
+            if (!localStream1) return;
+            
+            isMuted1 = !isMuted1;
+            localStream1.getAudioTracks().forEach(track => {
+                track.enabled = !isMuted1;
+            });
+            
+            document.getElementById('mute1').textContent = isMuted1 ? 'ミュート解除' : 'ミュート';
+            log1(isMuted1 ? 'ミュート有効' : 'ミュート解除');
+        }
+        
+        // User 2 functions (similar structure)
+        async function connectUser2() {
+            log2('WebSocketに接続中...');
+            
+            ws2 = new WebSocket(`${WS_URL}?userId=user2`);
+            
+            ws2.onopen = () => {
+                log2('WebSocket接続成功');
+                updateStatus2(true, 'シグナリングサーバーに接続済み');
+                document.getElementById('connect2').disabled = true;
+                document.getElementById('joinRoom2').disabled = false;
+            };
+            
+            ws2.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+                log2(`受信: ${message.type}`);
+                
+                switch (message.type) {
+                    case 'connected':
+                        log2(`ユーザーID: ${message.userId}`);
+                        break;
+                        
+                    case 'joined-room':
+                        log2(`ルームに参加 (${message.participantCount}人)`);
+                        break;
+                        
+                    case 'room-ready':
+                        log2('ルーム準備完了！');
+                        break;
+                        
+                    case 'offer':
+                        log2('Offerを受信');
+                        // Store offer for later use
+                        window.pendingOffer2 = message.offer;
+                        document.getElementById('answer2').disabled = false;
+                        break;
+                        
+                    case 'ice-candidate':
+                        log2('ICE candidateを受信');
+                        if (pc2) {
+                            await pc2.addIceCandidate(new RTCIceCandidate(message.candidate));
+                        }
+                        break;
+                        
+                    case 'participant-left':
+                        log2('相手が退出しました');
+                        hangup2();
+                        break;
+                }
+            };
+            
+            ws2.onerror = (error) => {
+                log2(`エラー: ${error}`);
+                updateStatus2(false, 'エラーが発生しました');
+            };
+            
+            ws2.onclose = () => {
+                log2('WebSocket切断');
+                updateStatus2(false, '未接続');
+            };
+        }
+        
+        function joinRoom2() {
+            if (!ws2) return;
+            
+            log2(`ルーム ${ROOM_ID} に参加中...`);
+            ws2.send(JSON.stringify({
+                type: 'join-room',
+                roomId: ROOM_ID
+            }));
+            
+            document.getElementById('joinRoom2').disabled = true;
+        }
+        
+        async function answerCall2() {
+            if (!window.pendingOffer2) {
+                log2('Offerがありません');
+                return;
+            }
+            
+            log2('通話に応答...');
+            
+            // Get user media
+            try {
+                localStream2 = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                log2('マイクアクセス許可');
+            } catch (error) {
+                log2(`マイクエラー: ${error.message}`);
+                return;
+            }
+            
+            // Create peer connection
+            pc2 = new RTCPeerConnection(iceServers);
+            
+            // Add local stream
+            localStream2.getTracks().forEach(track => {
+                pc2.addTrack(track, localStream2);
+            });
+            
+            // Handle remote stream
+            pc2.ontrack = (event) => {
+                log2('リモートストリーム受信');
+                const remoteAudio = document.getElementById('remoteAudio2');
+                remoteAudio.srcObject = event.streams[0];
+            };
+            
+            // Handle ICE candidates
+            pc2.onicecandidate = (event) => {
+                if (event.candidate) {
+                    log2('ICE candidate生成');
+                    ws2.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate
+                    }));
+                }
+            };
+            
+            // Set remote description (offer)
+            const offer = new RTCSessionDescription({
+                type: 'offer',
+                sdp: window.pendingOffer2
+            });
+            await pc2.setRemoteDescription(offer);
+            
+            // Create answer
+            const answer = await pc2.createAnswer();
+            await pc2.setLocalDescription(answer);
+            
+            log2('Answerを送信');
+            ws2.send(JSON.stringify({
+                type: 'answer',
+                answer: answer.sdp
+            }));
+            
+            document.getElementById('answer2').disabled = true;
+            document.getElementById('hangup2').disabled = false;
+            document.getElementById('mute2').disabled = false;
+            updateStatus2(true, '通話中');
+        }
+        
+        function hangup2() {
+            log2('通話を終了...');
+            
+            if (localStream2) {
+                localStream2.getTracks().forEach(track => track.stop());
+                localStream2 = null;
+            }
+            
+            if (pc2) {
+                pc2.close();
+                pc2 = null;
+            }
+            
+            if (ws2 && ws2.readyState === WebSocket.OPEN) {
+                ws2.send(JSON.stringify({ type: 'leave-room' }));
+            }
+            
+            document.getElementById('remoteAudio2').srcObject = null;
+            document.getElementById('answer2').disabled = true;
+            document.getElementById('hangup2').disabled = true;
+            document.getElementById('mute2').disabled = true;
+            document.getElementById('joinRoom2').disabled = false;
+            window.pendingOffer2 = null;
+            
+            updateStatus2(true, 'シグナリングサーバーに接続済み');
+        }
+        
+        function toggleMute2() {
+            if (!localStream2) return;
+            
+            isMuted2 = !isMuted2;
+            localStream2.getAudioTracks().forEach(track => {
+                track.enabled = !isMuted2;
+            });
+            
+            document.getElementById('mute2').textContent = isMuted2 ? 'ミュート解除' : 'ミュート';
+            log2(isMuted2 ? 'ミュート有効' : 'ミュート解除');
+        }
+    </script>
+</body>
+</html>
