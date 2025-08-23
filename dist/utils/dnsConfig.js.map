@@ -1,0 +1,1 @@
+{"version":3,"file":"dnsConfig.js","sourceRoot":"","sources":["../../src/utils/dnsConfig.ts"],"names":[],"mappings":";;AAGA,oCAIC;AAPD,iDAAiD;AACjD,MAAM,GAAG,GAAG,OAAO,CAAC,KAAK,CAAC,CAAC;AAE3B,SAAgB,YAAY;IAC1B,8DAA8D;IAC9D,GAAG,CAAC,UAAU,CAAC,CAAC,SAAS,EAAE,SAAS,CAAC,CAAC,CAAC;IACvC,OAAO,CAAC,GAAG,CAAC,kCAAkC,CAAC,CAAC;AAClD,CAAC"}
