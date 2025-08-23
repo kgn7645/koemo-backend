@@ -14,7 +14,7 @@
     "lint": "eslint src/ tests/",
     "lint:fix": "eslint src/ tests/ --fix",
     "format": "prettier --write src/ tests/",
-    "build": "tsc",
+    "build": "tsc --noEmit false",
     "docker:build": "docker build -t koemo-backend .",
     "docker:run": "docker run -p 3000:3000 koemo-backend"
   },

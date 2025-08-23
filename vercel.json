@@ -3,7 +3,10 @@
   "builds": [
     {
       "src": "src/index.ts",
-      "use": "@vercel/node"
+      "use": "@vercel/node",
+      "config": {
+        "includeFiles": ["src/**/*"]
+      }
     }
   ],
   "routes": [
@@ -19,5 +22,6 @@
     "src/index.ts": {
       "maxDuration": 60
     }
-  }
+  },
+  "buildCommand": "echo 'Skipping build for Vercel'"
 }
