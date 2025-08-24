@@ -24,8 +24,8 @@ console.log('Database object:', typeof database, database ? 'loaded' : 'undefine
 const WebRTCSignalingManager = require('./websocket/webrtcSignaling');
 const MatchingService_1 = __importDefault(require("./services/MatchingService"));
 // import { WebSocketHandler } from './websocket/WebSocketHandler';
-// import { AuthController } from './controllers/AuthController';
-// import { DebugController } from './controllers/debugController';
+const AuthController_1 = require('./controllers/AuthController');
+const debugController_1 = require('./controllers/debugController');
 console.log('Creating Express app...');
 const app = (0, express_1.default)();
 const PORT = process.env.PORT || 3000;
@@ -40,8 +40,8 @@ app.use(express_1.default.urlencoded({ extended: true }));
 // Serve static files
 app.use(express_1.default.static('.'));
 // Controllers
-// const authController = new AuthController();
-// const debugController = new DebugController();
+const authController = new AuthController_1.AuthController();
+const debugController = new debugController_1.DebugController();
 // Health check endpoint
 app.get('/health', (_req, res) => {
     res.json({
@@ -51,16 +51,16 @@ app.get('/health', (_req, res) => {
     });
 });
 // API Routes
-// app.post('/api/register', authController.register.bind(authController));
-// app.post('/api/login', authController.login.bind(authController));
-// app.post('/api/refresh-token', authController.refreshToken.bind(authController));
-// app.post('/api/logout', authController.logout.bind(authController));
+app.post('/api/register', authController.register.bind(authController));
+app.post('/api/login', authController.login.bind(authController));
+app.post('/api/refresh-token', authController.refreshToken.bind(authController));
+app.post('/api/logout', authController.logout.bind(authController));
 // Debug routes (開発環境のみ)
-// if (process.env.NODE_ENV !== 'production') {
-//   app.get('/api/debug/users', debugController.getAllUsers.bind(debugController));
-//   app.get('/api/debug/users/:deviceId', debugController.getUserByDeviceId.bind(debugController));
-//   app.get('/api/debug/stats', debugController.getStats.bind(debugController));
-// }
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/api/debug/users', debugController.getAllUsers.bind(debugController));
+  app.get('/api/debug/users/:deviceId', debugController.getUserByDeviceId.bind(debugController));
+  app.get('/api/debug/stats', debugController.getStats.bind(debugController));
+}
 // Error handling middleware
 app.use((err, _req, res, _next) => {
     console.error('Unhandled error:', err);
